@@ -140,8 +140,6 @@ def rag_system(base_config):
 
 ## 🧪 Initialization Tests
 
----
-
 def test_initialization_base(rag_system, base_config):
     """Test RAGSystem initialization with default values"""
     assert isinstance(rag_system.llm, MockOllamaLLM)
@@ -184,8 +182,6 @@ def test_initialization_custom_chunks():
     assert system.text_splitter.chunk_overlap == 50
 
 ## 💾 Document Loading and Vector Store Tests
-
----
 
 def test_load_pdf(rag_system):
     """Test loading and splitting a PDF file"""
@@ -247,8 +243,6 @@ def test_load_vectorstore(rag_system, mocker):
 
 ## 💬 Retrieval and Generation Tests
 
----
-
 def initialize_rag_for_query(rag_system):
     """Helper to initialize vectorstore for query tests"""
     rag_system.vectorstore = MockFAISS(documents=[], embeddings=rag_system.embeddings)
@@ -292,4 +286,3 @@ def test_generate_answer_full_flow(rag_system, mocker):
     # Check source formatting
     assert result["sources"][0]["metadata"]["source"] == "doc1"
     assert result["sources"][0]["content"].endswith("...")
-    
