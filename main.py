@@ -52,8 +52,8 @@ class RAGSystem:
         self,
         llm_config: LLMConfig,
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        chunk_size: int = 100,
-        chunk_overlap: int = 20
+        chunk_size: int = 1000,
+        chunk_overlap: int = 200
     ):
         """
         Initialize RAG system
@@ -130,26 +130,29 @@ class RAGSystem:
         """Load PDF and create vector store in one step"""
         documents = self.load_pdf(pdf_path)
         self.create_vectorstore(documents)
-    
+
     def retrieve_context(self, query: str, k: int = 4) -> List[Document]:
         """Retrieve relevant documents for a query"""
         if not self.vectorstore:
             raise ValueError("No documents loaded. Call load_from_pdf first.")
         return self.vectorstore.similarity_search(query, k=k)
-    
+
     def generate_answer(self, query: str, k: int = 4) -> dict:
         """
         Generate answer using RAG
-        
+
+        Args:
+            query: The question to answer
+            k: Number of chunks to retrieve
+
         Returns:
             dict with 'answer' and 'sources'
         """
-        # Retrieve relevant context
         relevant_docs = self.retrieve_context(query, k=k)
-        
+
         # Build context from retrieved documents
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
-        
+
         # Create prompt
         prompt = f"""Based on the following context, answer the question. If the answer cannot be found in the context, say so.
 
@@ -159,10 +162,10 @@ Context:
 Question: {query}
 
 Answer:"""
-        
+
         # Generate response
         response = self.llm.invoke(prompt)
-        
+
         return {
             "answer": response.strip(),
             "sources": [
@@ -207,14 +210,18 @@ def main():
     )
     
     rag_ollama = RAGSystem(llm_config=config_ollama)
-    
+
     # Load PDF and create knowledge base
     rag_ollama.load_from_pdf("resources/Grokking Algorithms.pdf")
-    
+
     # Query the system
-    result = rag_ollama.generate_answer("What is this document about?")
+    result = rag_ollama.generate_answer("What is this document about?", k=10)
+    print(f"\n{'='*60}")
+    print("FINAL ANSWER")
+    print('='*60)
     print(f"Answer: {result['answer']}\n")
     print(f"Sources: {len(result['sources'])} documents used")
+    print('='*60)
     
     
     # Example 2: Using llama.cpp
