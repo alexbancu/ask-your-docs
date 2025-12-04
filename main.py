@@ -15,16 +15,16 @@ For specific LLM backends:
 - Transformers: pip install transformers torch
 """
 
-import os
 from typing import List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.schema import Document
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+from langchain_ollama import OllamaLLM
 
 
 class LLMBackend(Enum):
@@ -52,8 +52,8 @@ class RAGSystem:
         self,
         llm_config: LLMConfig,
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200
+        chunk_size: int = 100,
+        chunk_overlap: int = 20
     ):
         """
         Initialize RAG system
@@ -77,8 +77,7 @@ class RAGSystem:
     def _initialize_llm(self):
         """Initialize the LLM based on backend configuration"""
         if self.llm_config.backend == LLMBackend.OLLAMA:
-            from langchain_community.llms import Ollama
-            return Ollama(
+            return OllamaLLM(
                 model=self.llm_config.model_name,
                 temperature=self.llm_config.temperature,
                 num_predict=self.llm_config.max_tokens
@@ -162,7 +161,7 @@ Question: {query}
 Answer:"""
         
         # Generate response
-        response = self.llm(prompt)
+        response = self.llm.invoke(prompt)
         
         return {
             "answer": response.strip(),
@@ -202,7 +201,7 @@ def main():
     
     config_ollama = LLMConfig(
         backend=LLMBackend.OLLAMA,
-        model_name="llama3.2",  # or "mistral", "phi", etc.
+        model_name="llama3.1:latest",  # or "mistral", "phi", etc.
         temperature=0.7,
         max_tokens=512
     )
@@ -210,48 +209,46 @@ def main():
     rag_ollama = RAGSystem(llm_config=config_ollama)
     
     # Load PDF and create knowledge base
-    # rag_ollama.load_from_pdf("your_document.pdf")
+    rag_ollama.load_from_pdf("resources/Grokking Algorithms.pdf")
     
     # Query the system
-    # result = rag_ollama.generate_answer("What is this document about?")
-    # print(f"Answer: {result['answer']}\n")
-    # print(f"Sources: {len(result['sources'])} documents used")
+    result = rag_ollama.generate_answer("What is this document about?")
+    print(f"Answer: {result['answer']}\n")
+    print(f"Sources: {len(result['sources'])} documents used")
     
     
     # Example 2: Using llama.cpp
-    print("\n" + "=" * 50)
-    print("Example 2: llama.cpp Backend")
-    print("=" * 50)
+    # print("\n" + "=" * 50)
+    # print("Example 2: llama.cpp Backend")
+    # print("=" * 50)
     
-    config_llamacpp = LLMConfig(
-        backend=LLMBackend.LLAMA_CPP,
-        model_name="llama-2-7b",
-        model_path="/path/to/model.gguf",  # Update this path
-        temperature=0.7,
-        max_tokens=512,
-        context_window=2048
-    )
+    # config_llamacpp = LLMConfig(
+    #     backend=LLMBackend.LLAMA_CPP,
+    #     model_name="llama-2-7b",
+    #     model_path="/path/to/model.gguf",  # Update this path
+    #     temperature=0.7,
+    #     max_tokens=512,
+    #     context_window=2048
+    # )
     
     # rag_llamacpp = RAGSystem(llm_config=config_llamacpp)
     
     
     # Example 3: Using Hugging Face
-    print("\n" + "=" * 50)
-    print("Example 3: Hugging Face Backend")
-    print("=" * 50)
+    # print("\n" + "=" * 50)
+    # print("Example 3: Hugging Face Backend")
+    # print("=" * 50)
     
-    config_hf = LLMConfig(
-        backend=LLMBackend.HUGGINGFACE,
-        model_name="gpt2",  # or "microsoft/phi-2", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-        temperature=0.7,
-        max_tokens=256
-    )
+    # config_hf = LLMConfig(
+    #     backend=LLMBackend.HUGGINGFACE,
+    #     model_name="gpt2",  # or "microsoft/phi-2", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    #     temperature=0.7,
+    #     max_tokens=256
+    # )
     
     # rag_hf = RAGSystem(llm_config=config_hf)
     
     
-    print("\n" + "=" * 50)
-    print("Setup complete! Uncomment examples to use.")
     print("=" * 50)
 
 
