@@ -1,31 +1,16 @@
 import pytest
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch, mock_open
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional, List
 
-# Re-define the original classes for the test file
-class LLMBackend(Enum):
-    """Supported LLM backends"""
-    OLLAMA = "ollama"
-    LLAMA_CPP = "llama_cpp"
-    HUGGINGFACE = "huggingface"
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-@dataclass
-class LLMConfig:
-    """Configuration for the LLM"""
-    backend: LLMBackend
-    model_name: str
-    temperature: float = 0.7
-    max_tokens: int = 512
-    model_path: Optional[str] = None
-    context_window: int = 2048
-
-# We need to include the RAGSystem class code here for the tests to run
-# (Assuming your RAGSystem class is defined in the file where these tests are run,
-# or imported from a module like 'rag_system').
-# For the purpose of this example, I will assume it is imported:
-# from your_module import LLMBackend, LLMConfig, RAGSystem
+# Import from main module
+from main import LLMBackend, LLMConfig, RAGSystem
 
 # --- Start Mocking Definitions ---
 
@@ -104,26 +89,20 @@ class MockFAISS:
 # Patch the external dependencies with our mock objects
 @pytest.fixture(autouse=True)
 def patch_rag_dependencies(mocker):
-    # Patch all the external classes used in RAGSystem
-    mocker.patch('your_module_name.HuggingFaceEmbeddings', MockHuggingFaceEmbeddings)
-    mocker.patch('your_module_name.RecursiveCharacterTextSplitter', MockRecursiveCharacterTextSplitter)
-    mocker.patch('your_module_name.OllamaLLM', MockOllamaLLM)
-    mocker.patch('your_module_name.PyPDFLoader', MockPyPDFLoader)
-    mocker.patch('your_module_name.FAISS', MockFAISS)
+    # Patch all the external classes used in RAGSystem (module-level imports only)
+    mocker.patch('main.HuggingFaceEmbeddings', MockHuggingFaceEmbeddings)
+    mocker.patch('main.RecursiveCharacterTextSplitter', MockRecursiveCharacterTextSplitter)
+    mocker.patch('main.OllamaLLM', MockOllamaLLM)
+    mocker.patch('main.PyPDFLoader', MockPyPDFLoader)
+    mocker.patch('main.FAISS', MockFAISS)
 
-    # Patch modules for conditional imports
-    mocker.patch('your_module_name.LlamaCpp', MockLlamaCpp)
-    mocker.patch('your_module_name.HuggingFacePipeline', MockHuggingFacePipeline)
-    mocker.patch('your_module_name.AutoTokenizer', MagicMock(return_value=MagicMock()))
-    mocker.patch('your_module_name.AutoModelForCausalLM', MagicMock(return_value=MagicMock()))
-    mocker.patch('your_module_name.pipeline', MagicMock(return_value=MagicMock()))
+    # Patch lazy imports inside _initialize_llm method
+    mocker.patch('langchain_community.llms.LlamaCpp', MockLlamaCpp)
+    mocker.patch('langchain_community.llms.HuggingFacePipeline', MockHuggingFacePipeline)
+    mocker.patch('transformers.AutoTokenizer', MagicMock())
+    mocker.patch('transformers.AutoModelForCausalLM', MagicMock())
+    mocker.patch('transformers.pipeline', MagicMock())
 
-    # The actual implementation of the LLM/dataclass/Enum classes
-    global LLMBackend, LLMConfig, RAGSystem, Document # ensure they are available
-    # Assuming RAGSystem is in a file named 'rag_system.py', 
-    # adjust 'your_module_name' to 'rag_system' or the actual name.
-    # If the RAGSystem class is pasted directly into the test file, 
-    # remove the 'your_module_name.' prefix on the mocker calls.
 
 
 @pytest.fixture
@@ -147,7 +126,7 @@ def test_initialization_base(rag_system, base_config):
     assert rag_system.llm.kwargs['temperature'] == base_config.temperature
     assert isinstance(rag_system.embeddings, MockHuggingFaceEmbeddings)
     assert rag_system.embeddings.model_name == "sentence-transformers/all-MiniLM-L6-v2"
-    assert rag_system.text_splitter.chunk_size == 100
+    assert rag_system.text_splitter.chunk_size == 1000
     assert rag_system.vectorstore is None
 
 def test_initialization_llama_cpp():
