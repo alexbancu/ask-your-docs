@@ -78,12 +78,18 @@ Sources:
 - [Ollama](https://ollama.ai) with llama3.1 model
 - PDF in `resources/Grokking Algorithms.pdf`
 
-## Architecture
+## How It Works
+
+| Step | Component | Tool | Purpose |
+|------|-----------|------|---------|
+| 1 | **Document Loader** | PyPDFLoader | Extracts text from PDF pages |
+| 2 | **Text Splitter** | RecursiveCharacterTextSplitter | Chunks text (1000 chars, 200 overlap) |
+| 3 | **Embeddings** | HuggingFace (MiniLM-L6-v2) | Converts text chunks → vectors |
+| 4 | **Vector Store** | FAISS | Stores vectors & finds similar chunks |
+| 5 | **LLM** | Ollama (llama3.1) | Generates answer from retrieved context |
 
 ```
-PDF → PyPDFLoader → RecursiveCharacterTextSplitter →
-    HuggingFaceEmbeddings → FAISS Vector Store →
-    Ollama LLM → Response + Sources
+Query → Embed → Search FAISS → Top K chunks → LLM → Answer + Sources
 ```
 
 ## Configuration
