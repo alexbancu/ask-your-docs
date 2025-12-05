@@ -100,6 +100,29 @@ class LLMConfig:
             )
 
 
+@dataclass
+class Source:
+    """A source document used in RAG response."""
+
+    content: str
+    metadata: Dict[str, Any]
+
+
+@dataclass
+class RAGResponse:
+    """Typed response from the RAG system."""
+
+    answer: str
+    sources: List[Source]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for backward compatibility."""
+        return {
+            "answer": self.answer,
+            "sources": [{"content": s.content, "metadata": s.metadata} for s in self.sources],
+        }
+
+
 class RAGSystem:
     """RAG system with configurable local LLM support."""
 
@@ -222,7 +245,7 @@ class RAGSystem:
         logger.debug("Retrieving %d documents for query: %s", k, query[:50])
         return self.vectorstore.similarity_search(query, k=k)
 
-    def generate_answer(self, query: str, k: int = 4) -> Dict[str, Any]:
+    def generate_answer(self, query: str, k: int = 4) -> RAGResponse:
         """
         Generate answer using RAG.
 
@@ -231,7 +254,7 @@ class RAGSystem:
             k: Number of chunks to retrieve
 
         Returns:
-            Dict with 'answer' and 'sources'
+            RAGResponse with answer and sources
         """
         logger.debug("Generating answer for query: %s", query[:50])
         relevant_docs = self.retrieve_context(query, k=k)
@@ -246,16 +269,15 @@ class RAGSystem:
         logger.debug("Invoking LLM with prompt length: %d chars", len(prompt))
         response = self.llm.invoke(prompt)
 
-        return {
-            "answer": response.strip(),
-            "sources": [
-                {
-                    "content": doc.page_content[:SOURCE_SNIPPET_LENGTH] + "...",
-                    "metadata": doc.metadata,
-                }
-                for doc in relevant_docs
-            ],
-        }
+        sources = [
+            Source(
+                content=doc.page_content[:SOURCE_SNIPPET_LENGTH] + "...",
+                metadata=doc.metadata,
+            )
+            for doc in relevant_docs
+        ]
+
+        return RAGResponse(answer=response.strip(), sources=sources)
 
     def _build_prompt(self, context: str, query: str) -> str:
         """Build the prompt for the LLM."""
@@ -332,8 +354,8 @@ def main() -> None:
     print(f"\n{'=' * 60}")
     print("FINAL ANSWER")
     print("=" * 60)
-    print(f"Answer: {result['answer']}\n")
-    print(f"Sources: {len(result['sources'])} documents used")
+    print(f"Answer: {result.answer}\n")
+    print(f"Sources: {len(result.sources)} documents used")
     print("=" * 60)
 
 

@@ -37,8 +37,13 @@ def print_sources(sources: list):
     """Print source citations."""
     print("\nSources:")
     for i, source in enumerate(sources, 1):
-        page = source["metadata"].get("page", "?")
-        snippet = source["content"][:100].replace("\n", " ")
+        # Handle both Source dataclass and dict format
+        if hasattr(source, "metadata"):
+            page = source.metadata.get("page", "?")
+            snippet = source.content[:100].replace("\n", " ")
+        else:
+            page = source["metadata"].get("page", "?")
+            snippet = source["content"][:100].replace("\n", " ")
         print(f"  {i}. Page {page}: \"{snippet}...\"")
 
 
@@ -160,10 +165,10 @@ def main() -> None:
 
     # Display answer
     print("\nAnswer:")
-    print(result["answer"])
+    print(result.answer)
 
     # Display sources
-    print_sources(result["sources"])
+    print_sources(result.sources)
 
     # Timing
     print(f"\n[Response time: {query_time:.1f}s]")
