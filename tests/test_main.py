@@ -143,9 +143,9 @@ def test_initialization_llama_cpp():
 
 def test_initialization_llama_cpp_no_path():
     """Test that LLAMA_CPP raises ValueError if model_path is missing"""
-    config = LLMConfig(backend=LLMBackend.LLAMA_CPP, model_name="test-llama")
-    with pytest.raises(ValueError, match="model_path required for llama.cpp backend"):
-        RAGSystem(llm_config=config)
+    # Validation now happens in LLMConfig.__post_init__
+    with pytest.raises(ValueError, match="model_path is required for llama.cpp backend"):
+        LLMConfig(backend=LLMBackend.LLAMA_CPP, model_name="test-llama")
 
 def test_initialization_huggingface():
     """Test initialization with HUGGINGFACE backend"""
@@ -162,10 +162,14 @@ def test_initialization_custom_chunks():
 
 ## 💾 Document Loading and Vector Store Tests
 
-def test_load_pdf(rag_system):
+def test_load_pdf(rag_system, mocker, tmp_path):
     """Test loading and splitting a PDF file"""
-    documents = rag_system.load_pdf("test.pdf")
-    # MockPyPDFLoader returns 2 pages. MockRecursiveCharacterTextSplitter 
+    # Create a mock PDF file for path validation
+    pdf_file = tmp_path / "test.pdf"
+    pdf_file.touch()
+
+    documents = rag_system.load_pdf(str(pdf_file))
+    # MockPyPDFLoader returns 2 pages. MockRecursiveCharacterTextSplitter
     # returns len(documents) * 2 chunks. So 2 * 2 = 4 chunks.
     assert len(documents) == 4
     assert documents[0].page_content == "chunk_0"
@@ -207,17 +211,21 @@ def test_save_vectorstore_no_store(rag_system):
     with pytest.raises(ValueError, match="No vector store to save"):
         rag_system.save_vectorstore("path")
 
-def test_load_vectorstore(rag_system, mocker):
+def test_load_vectorstore(rag_system, mocker, tmp_path):
     """Test loading the vector store from disk"""
+    # Create a mock vectorstore directory for path validation
+    store_path = tmp_path / "vectorstore"
+    store_path.mkdir()
+
     mock_load_local = mocker.spy(MockFAISS, 'load_local')
 
-    rag_system.load_vectorstore("path/to/load")
+    rag_system.load_vectorstore(str(store_path))
 
     assert rag_system.vectorstore is not None
     mock_load_local.assert_called_once_with(
-        "path/to/load", 
-        rag_system.embeddings, 
-        allow_dangerous_deserialization=True
+        str(store_path),
+        rag_system.embeddings,
+        allow_dangerous_deserialization=True,
     )
 
 ## 💬 Retrieval and Generation Tests
@@ -241,7 +249,7 @@ def test_retrieve_context_success(rag_system, mocker):
 
 def test_retrieve_context_no_vectorstore(rag_system):
     """Test retrieval raises error if vector store is missing"""
-    with pytest.raises(ValueError, match="No documents loaded. Call load_from_pdf first."):
+    with pytest.raises(ValueError, match="No documents loaded"):
         rag_system.retrieve_context("query")
 
 def test_generate_answer_full_flow(rag_system, mocker):
