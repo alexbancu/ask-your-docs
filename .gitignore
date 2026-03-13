@@ -209,3 +209,10 @@ __marimo__/
 # RAG vectorstore cache (large binary files)
 vectorstore/
 ai-dev-tasks/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# macOS
+.DS_Store

@@ -1,113 +1,134 @@
-# Servicegest RAG Assistant
+# Ask Your Docs — RAG Knowledge Base
 
-A RAG (Retrieval-Augmented Generation) system that answers questions from PDF documents using local LLMs.
+A cloud-deployed RAG (Retrieval-Augmented Generation) system that answers questions across multiple internal documents with source attribution. Built as a portfolio demo using a fictional "Acme Corp" knowledge base.
 
-## Quick Start
+## What Makes This Different
+
+- **Cross-document reasoning**: Synthesizes answers from 5 different internal documents (HR, engineering, onboarding, product, security)
+- **Source attribution**: Every answer cites specific documents and sections, so you can verify the information
+- **Confidence scoring**: Indicates when the system is less certain about an answer
+- **Production architecture**: Cloud-deployed with a proper API, vector database, and React frontend
+
+## Architecture
+
+```
+User → React Frontend → FastAPI Backend → Google Gemini 2.5 Flash
+                                        → Pinecone (vector search)
+                                        → HuggingFace Embeddings (MiniLM-L6-v2)
+```
+
+| Component | Technology | Hosting |
+|-----------|-----------|---------|
+| Frontend | React + TypeScript + Tailwind CSS | Vercel |
+| Backend API | FastAPI + LangChain | Render |
+| LLM | Google Gemini 2.5 Flash | Google AI API |
+| Vector Store | Pinecone (384 dims, cosine) | Pinecone Starter |
+| Embeddings | all-MiniLM-L6-v2 | Loaded at runtime |
+
+## Knowledge Base
+
+5 Acme Corp documents with cross-references between them:
+
+| Document | Type | Content |
+|----------|------|---------|
+| Employee Handbook | HR | PTO, remote work, expenses, benefits, 401k |
+| Engineering Runbook | Engineering | Incident response (P1-P4), on-call, deployments, SLOs |
+| Onboarding Guide | Onboarding | Day 1 checklist, team structure, 30/60/90 expectations |
+| Product Docs | Product | Acme Analytics API, data model, pricing, integrations |
+| Security Policy | Security | Encryption (AES-256/TLS 1.3), RBAC, SOC 2, password policy |
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js 20+
+- [uv](https://docs.astral.sh/uv/) package manager
+- Google AI API key
+- Pinecone API key
+
+### Backend
 
 ```bash
 # Install dependencies
 uv sync
 
-# Start Ollama (if not running)
-ollama serve
+# Copy and fill in environment variables
+cp .env.example .env
 
-# Pull the model
-ollama pull llama3.1:latest
+# Ingest documents into Pinecone
+uv run python scripts/ingest.py
 
-# Ask a question
+# Start the API server
+uv run uvicorn api.app:app --reload
+```
+
+API available at `http://localhost:8000`.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+UI available at `http://localhost:5173`.
+
+### Tests
+
+```bash
+# Backend tests
+uv run python -m pytest api/tests/ -v
+
+# Original local RAG tests
+uv run python -m pytest tests/ -v
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/ask` | Ask a question, returns answer + sources |
+| GET | `/health` | Service health check |
+| GET | `/documents` | List indexed documents |
+
+## Deploy Your Own
+
+### Backend (Render)
+
+1. Create a new Web Service on [Render](https://render.com)
+2. Connect your repo, select Docker environment
+3. Set environment variables: `GOOGLE_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`
+
+### Frontend (Vercel)
+
+1. Import repo on [Vercel](https://vercel.com)
+2. Set root directory to `frontend/`
+3. Set build command: `npm run build`, output: `dist`
+4. Add env var: `VITE_API_URL=https://your-backend.onrender.com`
+
+### Cost
+
+| Service | Plan | Cost |
+|---------|------|------|
+| Render | Free tier | $0 |
+| Vercel | Hobby | $0 |
+| Pinecone | Starter | $0 |
+| Gemini | Free tier (15 RPM) | $0 |
+
+## Original Local RAG
+
+The local Ollama-based RAG system is still available:
+
+```bash
+# Start Ollama
+ollama serve && ollama pull llama3.1:latest
+
+# Ask a question against local PDFs
 uv run python ask.py "How does binary search work?"
 ```
 
-## Usage
+## Built By
 
-```bash
-# Basic usage
-python ask.py "What is Big O notation?"
-
-# Rebuild vector store from PDF
-python ask.py "Explain quicksort" --rebuild
-
-# Use different model (must be pulled first: ollama pull mistral)
-python ask.py "What is a hash table?" --model mistral
-
-# Retrieve more context chunks
-python ask.py "Compare BFS and DFS" --chunks 8
-```
-
-## Available Models
-
-Pull any of these with `ollama pull <model>`:
-
-| Model | Size | Speed* | Notes |
-|-------|------|--------|-------|
-| `llama3.1:latest` | 4.9 GB | ~20s | Best quality, default |
-| `mistral` | 4.1 GB | ~15s | Good balance |
-
-*Response times on CPU. GPU acceleration significantly improves speed.
-
-## Example Output
-
-```
-============================================================
-  Servicegest RAG Assistant
-============================================================
-
-Loading knowledge base... Done (0.3s)
-
-Question: How does binary search work?
-
-------------------------------------------------------------
-
-Answer:
-Binary search works by repeatedly dividing the search interval in half.
-You start with a sorted list and guess the middle element. If your guess
-is too high, you eliminate the upper half. If too low, you eliminate the
-lower half. This continues until you find the element or the interval is
-empty.
-
-Sources:
-  1. Page 3: "Binary search is a lot faster than simple search..."
-  2. Page 5: "With binary search, you guess the middle number..."
-
-[Response time: 2.8s]
-```
-
-## Prerequisites
-
-- Python 3.12+
-- [Ollama](https://ollama.ai) with llama3.1 model
-- PDF in `resources/Grokking Algorithms.pdf`
-
-## How It Works
-
-| Step | Component | Tool | Purpose |
-|------|-----------|------|---------|
-| 1 | **Document Loader** | PyPDFLoader | Extracts text from PDF pages |
-| 2 | **Text Splitter** | RecursiveCharacterTextSplitter | Chunks text (1000 chars, 200 overlap) |
-| 3 | **Embeddings** | HuggingFace (MiniLM-L6-v2) | Converts text chunks → vectors |
-| 4 | **Vector Store** | FAISS | Stores vectors & finds similar chunks |
-| 5 | **LLM** | Ollama (llama3.1) | Generates answer from retrieved context |
-
-```
-Query → Embed → Search FAISS → Top K chunks → LLM → Answer + Sources
-```
-
-## Configuration
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Chunk size | 1000 chars | Text chunk size for splitting |
-| Chunk overlap | 200 chars | Overlap between chunks |
-| Retrieval k | 4 | Number of chunks to retrieve |
-| Model | llama3.1:latest | Ollama model |
-| Temperature | 0.7 | LLM creativity |
-
-## Development
-
-```bash
-# Run tests
-uv run pytest
-
-# Run the demo
-uv run python main.py
-```
+[Alex Bancu](https://github.com/alexbancu)
