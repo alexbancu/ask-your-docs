@@ -1,19 +1,18 @@
-"""Cloud RAG service using Gemini + Pinecone (direct SDKs, no LangChain)."""
+"""Cloud RAG service using Gemini + Pinecone."""
 
 import json
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from google import genai
-from google.genai import types
-from pinecone import Pinecone
+from langchain_core.documents import Document
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 
 from api.config import CloudConfig
 from api.document_loader import (
     DOCUMENT_OWNERS,
     FILENAME_TO_TYPE,
-    ChunkDoc,
     _filename_to_document_name,
     _is_stale,
     _parse_last_updated,
@@ -47,32 +46,30 @@ class CloudRAGService:
     def __init__(self, config: CloudConfig) -> None:
         self.config = config
 
-        self.genai_client = genai.Client(api_key=config.google_api_key)
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model=config.embedding_model,
+            google_api_key=config.google_api_key,
+        )
 
-        pc = Pinecone(api_key=config.pinecone_api_key)
-        self.index = pc.Index(config.pinecone_index_name)
+        self.vectorstore = PineconeVectorStore(
+            index_name=config.pinecone_index_name,
+            embedding=self.embeddings,
+            pinecone_api_key=config.pinecone_api_key,
+        )
+
+        self.llm = ChatGoogleGenerativeAI(
+            model=config.llm_model,
+            google_api_key=config.google_api_key,
+            temperature=config.llm_temperature,
+            max_output_tokens=config.max_output_tokens,
+            thinking_budget=0,
+        )
 
         logger.info("CloudRAGService initialized with model=%s", config.llm_model)
 
-    def _embed_query(self, text: str) -> list[float]:
-        """Embed a single query string.
-
-        Args:
-            text: The query text to embed.
-
-        Returns:
-            Embedding vector as list of floats.
-        """
-        result = self.genai_client.models.embed_content(
-            model=self.config.embedding_model,
-            contents=text,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
-        )
-        return result.embeddings[0].values
-
     def _retrieve(
         self, question: str
-    ) -> tuple[list[ChunkDoc], list[SourceResponse], str] | None:
+    ) -> tuple[list[Document], list[SourceResponse], str] | None:
         """Retrieve relevant chunks, sources, and confidence for a question.
 
         Args:
@@ -81,18 +78,16 @@ class CloudRAGService:
         Returns:
             Tuple of (chunks, sources, confidence) or None if no relevant results.
         """
-        query_vector = self._embed_query(question)
-
-        results = self.index.query(
-            vector=query_vector,
-            top_k=self.config.retrieval_k,
-            include_metadata=True,
+        results: list[tuple[Document, float]] = (
+            self.vectorstore.similarity_search_with_score(
+                question, k=self.config.retrieval_k
+            )
         )
 
-        if not results.matches:
+        if not results:
             return None
 
-        scores = [match.score for match in results.matches]
+        scores = [score for _, score in results]
         top_score = max(scores)
         logger.info(
             "Query: %s | Top: %.3f | Scores: %s",
@@ -102,20 +97,13 @@ class CloudRAGService:
         )
 
         relevant = [
-            (match, match.score)
-            for match in results.matches
-            if match.score >= RELEVANCE_CUTOFF
+            (doc, score) for doc, score in results if score >= RELEVANCE_CUTOFF
         ]
 
         if not relevant:
             return None
 
-        chunks: list[ChunkDoc] = []
-        for match, _ in relevant:
-            metadata = dict(match.metadata) if match.metadata else {}
-            page_content = metadata.pop("text", "")
-            chunks.append(ChunkDoc(page_content=page_content, metadata=metadata))
-
+        chunks = [doc for doc, _ in relevant]
         confidence = "high" if top_score >= HIGH_CONFIDENCE_THRESHOLD else "low"
 
         sources = [
@@ -163,26 +151,6 @@ class CloudRAGService:
         lower = answer.lower()
         return any(signal in lower for signal in no_info_signals)
 
-    def _generate(self, prompt: dict[str, str]) -> str:
-        """Generate a response from the LLM.
-
-        Args:
-            prompt: Dict with 'system' and 'user' keys.
-
-        Returns:
-            Generated text.
-        """
-        response = self.genai_client.models.generate_content(
-            model=self.config.llm_model,
-            contents=prompt["user"],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt["system"],
-                temperature=self.config.llm_temperature,
-                max_output_tokens=self.config.max_output_tokens,
-            ),
-        )
-        return response.text
-
     def ask(self, question: str) -> AskResponse:
         """Answer a question using RAG pipeline.
 
@@ -201,7 +169,8 @@ class CloudRAGService:
         chunks, sources, confidence = retrieval
 
         prompt = build_prompt(chunks, question)
-        answer = self._generate(prompt)
+        response = self.llm.invoke(prompt)
+        answer = response.content
 
         # Override confidence when the LLM itself says it lacks information
         if self._is_no_info_answer(answer):
@@ -242,17 +211,8 @@ class CloudRAGService:
 
         prompt = build_prompt(chunks, question)
         full_answer: list[str] = []
-
-        async for chunk in await self.genai_client.aio.models.generate_content_stream(
-            model=self.config.llm_model,
-            contents=prompt["user"],
-            config=types.GenerateContentConfig(
-                system_instruction=prompt["system"],
-                temperature=self.config.llm_temperature,
-                max_output_tokens=self.config.max_output_tokens,
-            ),
-        ):
-            token = chunk.text
+        async for chunk in self.llm.astream(prompt):
+            token = chunk.content
             if token:
                 full_answer.append(token)
                 yield f"event: token\ndata: {json.dumps(token)}\n\n"
@@ -270,24 +230,21 @@ class CloudRAGService:
         Returns:
             List of DocumentInfo objects.
         """
-        query_vector = self._embed_query("document overview")
-
-        results = self.index.query(
-            vector=query_vector,
-            top_k=100,
-            include_metadata=True,
+        results: list[tuple[Document, float]] = (
+            self.vectorstore.similarity_search_with_score(
+                "document overview", k=100
+            )
         )
 
         doc_sections: dict[str, set[int]] = {}
         doc_types: dict[str, str] = {}
         doc_slugs: dict[str, str] = {}
 
-        for match in results.matches:
-            metadata = match.metadata or {}
-            name = metadata.get("source_document", "Unknown")
-            doc_type = metadata.get("document_type", "general")
-            section = metadata.get("section_number", 0)
-            source_file = metadata.get("source_file", "")
+        for doc, _ in results:
+            name = doc.metadata.get("source_document", "Unknown")
+            doc_type = doc.metadata.get("document_type", "general")
+            section = doc.metadata.get("section_number", 0)
+            source_file = doc.metadata.get("source_file", "")
 
             if name not in doc_sections:
                 doc_sections[name] = set()
@@ -346,12 +303,9 @@ class CloudRAGService:
             HealthResponse with status information.
         """
         try:
-            query_vector = self._embed_query("health check")
-            results = self.index.query(
-                vector=query_vector, top_k=1, include_metadata=True
-            )
+            results = self.vectorstore.similarity_search("health check", k=1)
             pinecone_connected = True
-            documents_indexed = len(results.matches)
+            documents_indexed = len(results)
         except Exception:
             logger.exception("Pinecone health check failed")
             pinecone_connected = False

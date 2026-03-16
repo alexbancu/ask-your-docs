@@ -2,26 +2,13 @@
 
 import logging
 import re
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ChunkDoc:
-    """A lightweight document chunk replacing LangChain's Document class.
-
-    Attributes:
-        page_content: The text content of the chunk.
-        metadata: Arbitrary metadata dict (source, type, section, etc.).
-    """
-
-    page_content: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
 
 FILENAME_TO_TYPE: dict[str, str] = {
     "employee-handbook": "hr",
@@ -69,20 +56,18 @@ def _count_heading_level(text: str) -> int:
     return 0
 
 
-def load_documents(directory: str | Path) -> list[ChunkDoc]:
+def load_documents(directory: str | Path) -> list[Document]:
     """Load and chunk all markdown files from a directory with metadata.
 
     Args:
         directory: Path to directory containing markdown files.
 
     Returns:
-        List of ChunkDoc objects with enriched metadata.
+        List of Document objects with enriched metadata.
 
     Raises:
         FileNotFoundError: If directory does not exist.
     """
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-
     directory = Path(directory)
     if not directory.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
@@ -93,7 +78,7 @@ def load_documents(directory: str | Path) -> list[ChunkDoc]:
         separators=["\n## ", "\n### ", "\n\n", "\n", " "],
     )
 
-    all_documents: list[ChunkDoc] = []
+    all_documents: list[Document] = []
     md_files = sorted(directory.glob("*.md"))
 
     if not md_files:
@@ -110,7 +95,7 @@ def load_documents(directory: str | Path) -> list[ChunkDoc]:
 
         for chunk in chunks:
             section_num = _count_heading_level(chunk)
-            doc = ChunkDoc(
+            doc = Document(
                 page_content=chunk,
                 metadata={
                     "source_document": doc_name,

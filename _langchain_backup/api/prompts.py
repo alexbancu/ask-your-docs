@@ -1,6 +1,7 @@
 """System prompt and prompt builder for the cloud RAG service."""
 
-from api.document_loader import ChunkDoc
+from langchain_core.documents import Document
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 SYSTEM_PROMPT = """You are the Acme Corp internal knowledge assistant. Your role is to answer employee questions using ONLY the provided context documents.
 
@@ -16,15 +17,15 @@ Rules:
 """
 
 
-def build_prompt(chunks: list[ChunkDoc], query: str) -> dict[str, str]:
-    """Build a prompt dict with retrieved context chunks and user query.
+def build_prompt(chunks: list[Document], query: str) -> list[BaseMessage]:
+    """Build chat messages with retrieved context chunks and user query.
 
     Args:
         chunks: Retrieved document chunks with metadata.
         query: User's question.
 
     Returns:
-        Dict with 'system' and 'user' keys for the LLM.
+        List of chat messages for the LLM.
     """
     context_parts: list[str] = []
     for i, chunk in enumerate(chunks, 1):
@@ -40,4 +41,4 @@ def build_prompt(chunks: list[ChunkDoc], query: str) -> dict[str, str]:
 
     user_content = f"Context:\n{context}\n\nQuestion: {query}"
 
-    return {"system": SYSTEM_PROMPT, "user": user_content}
+    return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_content)]

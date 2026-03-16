@@ -1,4 +1,4 @@
-"""One-time ingestion script: load Acme Corp docs into Pinecone (direct SDKs)."""
+"""One-time ingestion script: load Acme Corp docs into Pinecone."""
 
 import logging
 import os
@@ -6,8 +6,8 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
 # Add project root to path
@@ -22,9 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 EMBEDDING_DIMENSION = 3072
-EMBEDDING_MODEL = "gemini-embedding-001"
 DOCS_DIR = Path(__file__).parent.parent / "resources" / "acme-corp"
-BATCH_SIZE = 100
 
 
 def main() -> None:
@@ -33,13 +31,9 @@ def main() -> None:
 
     pinecone_api_key = os.getenv("PINECONE_API_KEY", "")
     index_name = os.getenv("PINECONE_INDEX_NAME", "acme-corp-knowledge")
-    google_api_key = os.getenv("GOOGLE_API_KEY", "")
 
     if not pinecone_api_key:
         logger.error("PINECONE_API_KEY is required")
-        sys.exit(1)
-    if not google_api_key:
-        logger.error("GOOGLE_API_KEY is required")
         sys.exit(1)
 
     # Initialize Pinecone
@@ -61,8 +55,6 @@ def main() -> None:
     )
     logger.info("Index created")
 
-    index = pc.Index(index_name)
-
     # Load and chunk documents
     logger.info("Loading documents from %s", DOCS_DIR)
     documents = load_documents(DOCS_DIR)
@@ -71,36 +63,29 @@ def main() -> None:
         logger.error("No documents loaded")
         sys.exit(1)
 
-    # Initialize Google GenAI client
-    client = genai.Client(api_key=google_api_key)
+    # Initialize embeddings
+    google_api_key = os.getenv("GOOGLE_API_KEY", "")
+    if not google_api_key:
+        logger.error("GOOGLE_API_KEY is required")
+        sys.exit(1)
 
-    # Embed and upsert in batches
-    logger.info("Embedding and upserting %d chunks...", len(documents))
-    for batch_start in range(0, len(documents), BATCH_SIZE):
-        batch = documents[batch_start : batch_start + BATCH_SIZE]
-        texts = [doc.page_content for doc in batch]
+    logger.info("Initializing Google embedding model...")
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="gemini-embedding-001",
+        google_api_key=google_api_key,
+    )
 
-        result = client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=texts,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-        )
-
-        vectors = []
-        for i, (doc, embedding) in enumerate(zip(batch, result.embeddings)):
-            source_file = doc.metadata.get("source_file", "unknown")
-            vector_id = f"{source_file}-{batch_start + i}"
-            metadata = {**doc.metadata, "text": doc.page_content}
-            vectors.append((vector_id, embedding.values, metadata))
-
-        index.upsert(vectors=vectors)
-        logger.info(
-            "Upserted batch %d–%d", batch_start, batch_start + len(batch) - 1
-        )
+    # Upsert to Pinecone
+    logger.info("Upserting %d chunks to Pinecone...", len(documents))
+    PineconeVectorStore.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        index_name=index_name,
+        pinecone_api_key=pinecone_api_key,
+    )
 
     logger.info("Ingestion complete!")
-    source_files = {d.metadata["source_file"] for d in documents}
-    logger.info("  Documents processed: %d", len(source_files))
+    logger.info("  Documents processed: %d", len(set(d.metadata["source_file"] for d in documents)))
     logger.info("  Total chunks: %d", len(documents))
 
 

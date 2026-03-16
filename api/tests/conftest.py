@@ -4,10 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
 
 from api.config import CloudConfig
+from api.document_loader import ChunkDoc
 from api.models import AskResponse, DocumentContentResponse, SourceResponse
 
 
@@ -28,10 +27,10 @@ def cloud_config() -> CloudConfig:
 
 
 @pytest.fixture
-def sample_documents() -> list[Document]:
+def sample_documents() -> list[ChunkDoc]:
     """Create sample documents with metadata."""
     return [
-        Document(
+        ChunkDoc(
             page_content="All full-time employees receive 20 days of PTO per year.",
             metadata={
                 "source_document": "Employee Handbook",
@@ -40,7 +39,7 @@ def sample_documents() -> list[Document]:
                 "source_file": "employee-handbook.md",
             },
         ),
-        Document(
+        ChunkDoc(
             page_content="P1 incidents require 15-minute response time.",
             metadata={
                 "source_document": "Engineering Runbook",
@@ -49,7 +48,7 @@ def sample_documents() -> list[Document]:
                 "source_file": "engineering-runbook.md",
             },
         ),
-        Document(
+        ChunkDoc(
             page_content="All data is encrypted using AES-256 encryption.",
             metadata={
                 "source_document": "Security Policy",
@@ -62,62 +61,57 @@ def sample_documents() -> list[Document]:
 
 
 @pytest.fixture
-def sample_search_results(
-    sample_documents: list[Document],
-) -> list[tuple[Document, float]]:
-    """Create sample search results with scores."""
-    return [
-        (sample_documents[0], 0.85),
-        (sample_documents[1], 0.72),
-        (sample_documents[2], 0.65),
-    ]
+def mock_pinecone_matches(sample_documents: list[ChunkDoc]) -> list[MagicMock]:
+    """Create mock Pinecone query match objects."""
+    matches = []
+    scores = [0.85, 0.72, 0.65]
+    for doc, score in zip(sample_documents, scores):
+        match = MagicMock()
+        match.score = score
+        match.metadata = {**doc.metadata, "text": doc.page_content}
+        matches.append(match)
+    return matches
 
 
 @pytest.fixture
-def mock_vectorstore(
-    sample_search_results: list[tuple[Document, float]],
-) -> MagicMock:
-    """Create a mock Pinecone vector store."""
+def mock_index(mock_pinecone_matches: list[MagicMock]) -> MagicMock:
+    """Create a mock Pinecone index."""
     mock = MagicMock()
-    mock.similarity_search_with_score.return_value = sample_search_results
-    mock.similarity_search.return_value = [doc for doc, _ in sample_search_results]
+    query_result = MagicMock()
+    query_result.matches = mock_pinecone_matches
+    mock.query.return_value = query_result
     return mock
 
 
 @pytest.fixture
-def mock_llm() -> MagicMock:
-    """Create a mock Gemini LLM that returns AIMessage."""
+def mock_genai_client() -> MagicMock:
+    """Create a mock google-genai client."""
     mock = MagicMock()
-    mock.invoke.return_value = AIMessage(
-        content="Based on the Employee Handbook, all full-time employees receive 20 days of PTO per year."
-    )
-    return mock
 
+    # Mock embed_content
+    embed_response = MagicMock()
+    embedding = MagicMock()
+    embedding.values = [0.1] * 3072
+    embed_response.embeddings = [embedding]
+    mock.models.embed_content.return_value = embed_response
 
-@pytest.fixture
-def mock_embeddings() -> MagicMock:
-    """Create a mock embedding model."""
-    mock = MagicMock()
-    mock.embed_query.return_value = [0.1] * 3072
-    mock.embed_documents.return_value = [[0.1] * 3072]
+    # Mock generate_content
+    gen_response = MagicMock()
+    gen_response.text = "Based on the Employee Handbook, all full-time employees receive 20 days of PTO per year."
+    mock.models.generate_content.return_value = gen_response
+
     return mock
 
 
 @pytest.fixture
 def mock_rag_service(
     cloud_config: CloudConfig,
-    mock_vectorstore: MagicMock,
-    mock_llm: MagicMock,
-    mock_embeddings: MagicMock,
 ) -> MagicMock:
     """Create a mock CloudRAGService with pre-configured responses."""
     from api.rag_service import CloudRAGService
 
     service = MagicMock(spec=CloudRAGService)
     service.config = cloud_config
-    service.vectorstore = mock_vectorstore
-    service.llm = mock_llm
-    service.embeddings = mock_embeddings
 
     service.ask.return_value = AskResponse(
         answer="All full-time employees receive 20 days of PTO per year.",

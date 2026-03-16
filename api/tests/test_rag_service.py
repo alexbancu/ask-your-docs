@@ -3,13 +3,12 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, AIMessageChunk
 
 from api.config import CloudConfig
+from api.document_loader import ChunkDoc
 from api.rag_service import CloudRAGService, HIGH_CONFIDENCE_THRESHOLD
 
 
@@ -19,29 +18,25 @@ class TestCloudRAGServiceAsk:
     def _make_service(
         self,
         config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> CloudRAGService:
         """Create a CloudRAGService with mocked dependencies."""
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             return CloudRAGService(config)
 
     def test_ask_returns_answer_with_sources(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that ask returns an answer with source attributions."""
-        service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
-        )
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
         result = service.ask("What is the PTO policy?")
 
@@ -54,15 +49,14 @@ class TestCloudRAGServiceAsk:
     def test_ask_empty_results_returns_low_confidence(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that empty search results return low confidence."""
-        mock_vectorstore.similarity_search_with_score.return_value = []
-        service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
-        )
+        empty_result = MagicMock()
+        empty_result.matches = []
+        mock_index.query.return_value = empty_result
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
         result = service.ask("What is quantum physics?")
 
@@ -73,28 +67,22 @@ class TestCloudRAGServiceAsk:
     def test_ask_low_scores_return_low_confidence(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that low similarity scores result in low confidence."""
-        low_score_results = [
-            (
-                Document(
-                    page_content="Some content",
-                    metadata={
-                        "source_document": "Test",
-                        "document_type": "hr",
-                        "section_number": 1,
-                    },
-                ),
-                0.3,
-            ),
-        ]
-        mock_vectorstore.similarity_search_with_score.return_value = low_score_results
-        service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
-        )
+        match = MagicMock()
+        match.score = 0.3
+        match.metadata = {
+            "text": "Some content",
+            "source_document": "Test",
+            "document_type": "hr",
+            "section_number": 1,
+        }
+        low_result = MagicMock()
+        low_result.matches = [match]
+        mock_index.query.return_value = low_result
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
         result = service.ask("Something vague")
 
@@ -103,15 +91,11 @@ class TestCloudRAGServiceAsk:
     def test_ask_cross_document_sources(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
-        sample_search_results: list[tuple[Document, float]],
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that sources from multiple documents are returned."""
-        service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
-        )
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
         result = service.ask("Tell me about company policies")
 
@@ -121,22 +105,18 @@ class TestCloudRAGServiceAsk:
     def test_ask_calls_llm_with_prompt(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that the LLM is invoked with a properly formatted prompt."""
-        service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
-        )
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
         service.ask("What is the PTO policy?")
 
-        mock_llm.invoke.assert_called_once()
-        messages = mock_llm.invoke.call_args[0][0]
-        assert isinstance(messages, list)
-        assert "What is the PTO policy?" in messages[1].content
-        assert "Acme Corp" in messages[0].content
+        mock_genai_client.models.generate_content.assert_called_once()
+        call_kwargs = mock_genai_client.models.generate_content.call_args
+        assert "What is the PTO policy?" in call_kwargs.kwargs["contents"]
+        assert "Acme Corp" in call_kwargs.kwargs["config"].system_instruction
 
 
 class TestCloudRAGServiceHealth:
@@ -145,16 +125,15 @@ class TestCloudRAGServiceHealth:
     def test_healthy_when_pinecone_connected(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test health check returns healthy when Pinecone is connected."""
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
 
         result = service.health_check()
@@ -165,17 +144,16 @@ class TestCloudRAGServiceHealth:
     def test_degraded_when_pinecone_fails(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test health check returns degraded when Pinecone fails."""
-        mock_vectorstore.similarity_search.side_effect = Exception("Connection failed")
+        mock_genai_client.models.embed_content.side_effect = Exception("Connection failed")
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
 
         result = service.health_check()
@@ -190,17 +168,16 @@ class TestCloudRAGServiceGetDocument:
     def test_get_document_returns_content(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test get_document returns full document content."""
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
             tempfile.TemporaryDirectory() as tmpdir,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
             service.RESOURCES_DIR = tmpdir
 
@@ -221,17 +198,16 @@ class TestCloudRAGServiceGetDocument:
     def test_get_document_not_found(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test get_document returns None for missing slug."""
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
             tempfile.TemporaryDirectory() as tmpdir,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
             service.RESOURCES_DIR = tmpdir
 
@@ -246,35 +222,39 @@ class TestCloudRAGServiceStream:
     def _make_service(
         self,
         config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> CloudRAGService:
         """Create a CloudRAGService with mocked dependencies."""
         with (
-            patch("api.rag_service.GoogleGenerativeAIEmbeddings", return_value=mock_embeddings),
-            patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
-            patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
+            patch("api.rag_service.genai.Client", return_value=mock_genai_client),
+            patch("api.rag_service.Pinecone") as mock_pc_cls,
         ):
+            mock_pc_cls.return_value.Index.return_value = mock_index
             return CloudRAGService(config)
 
     @pytest.mark.anyio
     async def test_ask_stream_yields_sources_tokens_done(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that ask_stream yields sources, then tokens, then done."""
 
-        async def fake_astream(messages: list):
-            yield AIMessageChunk(content="The ")
-            yield AIMessageChunk(content="PTO policy")
+        async def fake_stream(*args, **kwargs):
+            chunk1 = MagicMock()
+            chunk1.text = "The "
+            yield chunk1
+            chunk2 = MagicMock()
+            chunk2.text = "PTO policy"
+            yield chunk2
 
-        mock_llm.astream = fake_astream
+        mock_genai_client.aio.models.generate_content_stream = AsyncMock(
+            return_value=fake_stream()
+        )
         service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
+            cloud_config, mock_index, mock_genai_client
         )
 
         events: list[str] = []
@@ -299,14 +279,15 @@ class TestCloudRAGServiceStream:
     async def test_ask_stream_no_results(
         self,
         cloud_config: CloudConfig,
-        mock_vectorstore: MagicMock,
-        mock_llm: MagicMock,
-        mock_embeddings: MagicMock,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
     ) -> None:
         """Test that ask_stream handles no results gracefully."""
-        mock_vectorstore.similarity_search_with_score.return_value = []
+        empty_result = MagicMock()
+        empty_result.matches = []
+        mock_index.query.return_value = empty_result
         service = self._make_service(
-            cloud_config, mock_vectorstore, mock_llm, mock_embeddings
+            cloud_config, mock_index, mock_genai_client
         )
 
         events: list[str] = []
