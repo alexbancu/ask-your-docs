@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://ask-your-docs.onrender.com/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
