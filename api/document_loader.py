@@ -1,5 +1,6 @@
-"""Markdown document loader with metadata tagging for the Acme Corp knowledge base."""
+"""Markdown document loader with metadata tagging for the RAG knowledge base."""
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -23,6 +24,32 @@ class ChunkDoc:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class DemoConfig:
+    """Configuration for a single demo loaded from demo.json.
+
+    Attributes:
+        name: Human-readable demo name.
+        slug: Directory name / URL slug for the demo.
+        documents: Mapping of filename stem to {type, owner} dicts.
+    """
+
+    name: str
+    slug: str
+    documents: dict[str, dict[str, str]]
+
+    @property
+    def filename_to_type(self) -> dict[str, str]:
+        """Map of filename stem to document type."""
+        return {k: v.get("type", "general") for k, v in self.documents.items()}
+
+    @property
+    def document_owners(self) -> dict[str, str]:
+        """Map of filename stem to document owner."""
+        return {k: v.get("owner", "Unknown") for k, v in self.documents.items()}
+
+
+# Legacy hardcoded mappings — used as fallback when no demo config is available.
 FILENAME_TO_TYPE: dict[str, str] = {
     "employee-handbook": "hr",
     "engineering-runbook": "engineering",
@@ -40,6 +67,51 @@ DOCUMENT_OWNERS: dict[str, str] = {
 }
 
 STALE_THRESHOLD_DAYS = 180
+
+
+def load_demo_config(demo_slug: str) -> DemoConfig:
+    """Load a demo configuration from resources/{demo_slug}/demo.json.
+
+    Args:
+        demo_slug: The demo directory name (e.g. 'acme-corp').
+
+    Returns:
+        DemoConfig instance.
+
+    Raises:
+        FileNotFoundError: If demo.json does not exist.
+    """
+    config_path = Path("resources") / demo_slug / "demo.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Demo config not found: {config_path}")
+
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    return DemoConfig(
+        name=data["name"],
+        slug=demo_slug,
+        documents=data.get("documents", {}),
+    )
+
+
+def list_demos() -> list[DemoConfig]:
+    """List all available demos by scanning resources/*/demo.json.
+
+    Returns:
+        List of DemoConfig instances, sorted by slug.
+    """
+    resources = Path("resources")
+    if not resources.exists():
+        return []
+
+    demos: list[DemoConfig] = []
+    for demo_dir in sorted(resources.iterdir()):
+        config_path = demo_dir / "demo.json"
+        if demo_dir.is_dir() and config_path.exists():
+            try:
+                demos.append(load_demo_config(demo_dir.name))
+            except Exception:
+                logger.exception("Failed to load demo config from %s", demo_dir)
+    return demos
 
 
 def _filename_to_document_name(filename: str) -> str:
@@ -69,11 +141,16 @@ def _count_heading_level(text: str) -> int:
     return 0
 
 
-def load_documents(directory: str | Path) -> list[ChunkDoc]:
+def load_documents(
+    directory: str | Path,
+    demo_config: DemoConfig | None = None,
+) -> list[ChunkDoc]:
     """Load and chunk all markdown files from a directory with metadata.
 
     Args:
         directory: Path to directory containing markdown files.
+        demo_config: Optional demo config for type lookups. Falls back to
+            hardcoded FILENAME_TO_TYPE when None.
 
     Returns:
         List of ChunkDoc objects with enriched metadata.
@@ -86,6 +163,8 @@ def load_documents(directory: str | Path) -> list[ChunkDoc]:
     directory = Path(directory)
     if not directory.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
+
+    type_map = demo_config.filename_to_type if demo_config else FILENAME_TO_TYPE
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -103,7 +182,7 @@ def load_documents(directory: str | Path) -> list[ChunkDoc]:
     for md_file in md_files:
         stem = md_file.stem
         doc_name = _filename_to_document_name(stem)
-        doc_type = FILENAME_TO_TYPE.get(stem, "general")
+        doc_type = type_map.get(stem, "general")
 
         content = md_file.read_text(encoding="utf-8")
         chunks = splitter.split_text(content)
@@ -162,12 +241,17 @@ def _is_stale(last_updated: str | None) -> bool:
         return True
 
 
-def load_full_document(directory: str | Path, slug: str) -> dict | None:
+def load_full_document(
+    directory: str | Path,
+    slug: str,
+    demo_config: DemoConfig | None = None,
+) -> dict | None:
     """Read a single markdown file and return its content with metadata.
 
     Args:
         directory: Path to directory containing markdown files.
         slug: Filename stem (e.g. 'employee-handbook').
+        demo_config: Optional demo config for type/owner lookups.
 
     Returns:
         Dict with name, slug, document_type, content, owner, last_updated,
@@ -179,6 +263,9 @@ def load_full_document(directory: str | Path, slug: str) -> dict | None:
     if not md_file.exists():
         return None
 
+    type_map = demo_config.filename_to_type if demo_config else FILENAME_TO_TYPE
+    owner_map = demo_config.document_owners if demo_config else DOCUMENT_OWNERS
+
     content = md_file.read_text(encoding="utf-8")
     last_updated = _parse_last_updated(content)
     sections = re.findall(r"^##\s+\d+\.", content, re.MULTILINE)
@@ -186,9 +273,9 @@ def load_full_document(directory: str | Path, slug: str) -> dict | None:
     return {
         "name": _filename_to_document_name(slug),
         "slug": slug,
-        "document_type": FILENAME_TO_TYPE.get(slug, "general"),
+        "document_type": type_map.get(slug, "general"),
         "content": content,
-        "owner": DOCUMENT_OWNERS.get(slug, "Unknown"),
+        "owner": owner_map.get(slug, "Unknown"),
         "last_updated": last_updated,
         "is_stale": _is_stale(last_updated),
         "section_count": len(sections),

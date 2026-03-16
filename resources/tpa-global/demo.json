@@ -1,0 +1,6 @@
+{
+  "name": "TPA Global",
+  "documents": {
+    "romania-transfer-pricing": { "type": "tax", "owner": "TPA Global" }
+  }
+}

@@ -8,8 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.config import CloudConfig
-from api.document_loader import ChunkDoc
-from api.rag_service import CloudRAGService, HIGH_CONFIDENCE_THRESHOLD
+from api.rag_service import CloudRAGService
 
 
 class TestCloudRAGServiceAsk:
@@ -38,13 +37,27 @@ class TestCloudRAGServiceAsk:
         """Test that ask returns an answer with source attributions."""
         service = self._make_service(cloud_config, mock_index, mock_genai_client)
 
-        result = service.ask("What is the PTO policy?")
+        result = service.ask("What is the PTO policy?", demo_slug="acme-corp")
 
         assert result.answer
         assert len(result.sources) == 3
         assert result.sources[0].document_name == "Employee Handbook"
         assert result.sources[0].document_type == "hr"
         assert result.confidence == "high"
+
+    def test_ask_passes_namespace_to_pinecone(
+        self,
+        cloud_config: CloudConfig,
+        mock_index: MagicMock,
+        mock_genai_client: MagicMock,
+    ) -> None:
+        """Test that ask passes the demo_slug as namespace to Pinecone."""
+        service = self._make_service(cloud_config, mock_index, mock_genai_client)
+
+        service.ask("What is the PTO policy?", demo_slug="hooli")
+
+        call_kwargs = mock_index.query.call_args
+        assert call_kwargs.kwargs["namespace"] == "hooli"
 
     def test_ask_empty_results_returns_low_confidence(
         self,
@@ -179,7 +192,12 @@ class TestCloudRAGServiceGetDocument:
         ):
             mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
-            service.RESOURCES_DIR = tmpdir
+
+            # Create a demo.json in the temp dir
+            demo_json = Path(tmpdir) / "demo.json"
+            demo_json.write_text(
+                '{"name": "Test", "documents": {"employee-handbook": {"type": "hr", "owner": "HR Team"}}}'
+            )
 
             (Path(tmpdir) / "employee-handbook.md").write_text(
                 "# Employee Handbook\n\n"
@@ -187,7 +205,18 @@ class TestCloudRAGServiceGetDocument:
                 "## 1. Welcome\n\nWelcome!\n"
             )
 
-            result = service.get_document("employee-handbook")
+            # Patch _resources_dir and _demo_config to point to temp dir
+            with (
+                patch.object(service, "_resources_dir", return_value=tmpdir),
+                patch(
+                    "api.rag_service.load_demo_config",
+                    return_value=MagicMock(
+                        filename_to_type={"employee-handbook": "hr"},
+                        document_owners={"employee-handbook": "HR Team"},
+                    ),
+                ),
+            ):
+                result = service.get_document("employee-handbook", demo_slug="test")
 
         assert result is not None
         assert result.name == "Employee Handbook"
@@ -209,9 +238,9 @@ class TestCloudRAGServiceGetDocument:
         ):
             mock_pc_cls.return_value.Index.return_value = mock_index
             service = CloudRAGService(cloud_config)
-            service.RESOURCES_DIR = tmpdir
 
-            result = service.get_document("nonexistent")
+            with patch.object(service, "_resources_dir", return_value=tmpdir):
+                result = service.get_document("nonexistent", demo_slug="test")
 
         assert result is None
 
@@ -258,7 +287,9 @@ class TestCloudRAGServiceStream:
         )
 
         events: list[str] = []
-        async for event in service.ask_stream("What is the PTO policy?"):
+        async for event in service.ask_stream(
+            "What is the PTO policy?", demo_slug="acme-corp"
+        ):
             events.append(event)
 
         # First event: sources

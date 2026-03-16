@@ -1,3 +1,12 @@
+export interface DemoInfo {
+  slug: string;
+  name: string;
+}
+
+export interface DemosResponse {
+  demos: DemoInfo[];
+}
+
 export interface Source {
   content: string;
   document_name: string;

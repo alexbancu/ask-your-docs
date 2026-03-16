@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Source } from "../types";
+import { useDemo } from "../contexts/DemoContext";
 import { TYPE_STYLES, DEFAULT_STYLE, nameToSlug } from "../constants/styles";
 
 interface SourcePanelProps {
@@ -7,6 +8,8 @@ interface SourcePanelProps {
 }
 
 export default function SourcePanel({ sources }: SourcePanelProps) {
+  const { demoSlug } = useDemo();
+
   if (sources.length === 0) return null;
 
   // Deduplicate by document name + section so each unique section gets a card
@@ -28,7 +31,7 @@ export default function SourcePanel({ sources }: SourcePanelProps) {
         return (
           <Link
             key={`${source.document_name}-${i}`}
-            to={`/documents/${slug}${hash}`}
+            to={`/demo/${demoSlug}/documents/${slug}${hash}`}
             className="flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 transition-colors duration-150"
             style={{
               background: style.bg,

@@ -3,10 +3,12 @@ import { Link, useParams, useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import type { DocumentContent } from "../types";
 import { getDocumentContent } from "../api/client";
+import { useDemo } from "../contexts/DemoContext";
 import { TYPE_STYLES, DEFAULT_STYLE } from "../constants/styles";
 
 export default function DocumentViewer() {
   const { slug } = useParams<{ slug: string }>();
+  const { demoSlug } = useDemo();
   const location = useLocation();
   const [doc, setDoc] = useState<DocumentContent | null>(null);
   const [error, setError] = useState(false);
@@ -16,11 +18,11 @@ export default function DocumentViewer() {
     if (!slug) return;
     setLoading(true);
     setError(false);
-    getDocumentContent(slug)
+    getDocumentContent(demoSlug, slug)
       .then(setDoc)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [demoSlug, slug]);
 
   // Scroll to section when hash changes (retry until ReactMarkdown renders the element)
   useEffect(() => {
@@ -47,10 +49,12 @@ export default function DocumentViewer() {
     return () => clearTimeout(timer);
   }, [location.hash, loading]);
 
+  const basePath = `/demo/${demoSlug}`;
+
   if (loading) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
+        <Header basePath={basePath} />
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[720px] px-4 py-8 md:px-6">
             <div className="space-y-4">
@@ -67,7 +71,7 @@ export default function DocumentViewer() {
   if (error || !doc) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
+        <Header basePath={basePath} />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-lg font-medium" style={{ color: "var(--color-text-primary)" }}>
@@ -77,7 +81,7 @@ export default function DocumentViewer() {
               The document you're looking for doesn't exist.
             </p>
             <Link
-              to="/"
+              to={basePath}
               className="mt-4 inline-block rounded-lg px-4 py-2 text-sm font-medium"
               style={{ background: "var(--color-accent)", color: "#fff" }}
             >
@@ -93,7 +97,7 @@ export default function DocumentViewer() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <Header title={doc.name} />
+      <Header basePath={basePath} title={doc.name} />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[720px] px-4 py-6 md:px-6">
           {/* Metadata bar */}
@@ -146,14 +150,14 @@ export default function DocumentViewer() {
   );
 }
 
-function Header({ title }: { title?: string }) {
+function Header({ basePath, title }: { basePath: string; title?: string }) {
   return (
     <header
       className="flex shrink-0 items-center gap-3 px-4 py-3 md:px-6"
       style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
     >
       <Link
-        to="/"
+        to={basePath}
         className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-medium transition-colors"
         style={{ color: "var(--color-text-secondary)" }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-overlay)")}

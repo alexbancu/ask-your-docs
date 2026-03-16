@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { Message } from "../types";
-import { askQuestionStream } from "../api/client";
+import type { DemoInfo, Message } from "../types";
+import { askQuestionStream, getDemos } from "../api/client";
+import { useDemo } from "../contexts/DemoContext";
 import ExampleChips from "./ExampleChips";
 import MessageBubble from "./MessageBubble";
 
@@ -17,14 +18,26 @@ export default function ChatInterface({
   setMessages,
   onConversationUpdate,
 }: ChatInterfaceProps) {
+  const { demoSlug } = useDemo();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [demoName, setDemoName] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Fetch demo name
+  useEffect(() => {
+    getDemos()
+      .then((res) => {
+        const demo = res.demos.find((d: DemoInfo) => d.slug === demoSlug);
+        if (demo) setDemoName(demo.name);
+      })
+      .catch(() => {});
+  }, [demoSlug]);
 
   // Focus input on / key
   useEffect(() => {
@@ -59,7 +72,7 @@ export default function ChatInterface({
     setTimeout(scrollToBottom, 100);
 
     try {
-      await askQuestionStream(question.trim(), {
+      await askQuestionStream(demoSlug, question.trim(), {
         onSources: (sources, confidence) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -114,6 +127,8 @@ export default function ChatInterface({
     void handleSubmit(input);
   };
 
+  const displayName = demoName || demoSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
@@ -138,7 +153,7 @@ export default function ChatInterface({
             className="text-[15px] font-semibold tracking-tight"
             style={{ color: "var(--color-text-primary)" }}
           >
-            Acme Corp
+            {displayName}
           </span>
           <span
             className="rounded-full px-2 py-0.5 text-[10px] font-medium"
@@ -172,7 +187,7 @@ export default function ChatInterface({
                 className="mt-3 max-w-md text-center text-[15px] leading-relaxed"
                 style={{ color: "var(--color-text-secondary)" }}
               >
-                Ask anything about Acme Corp — policies, engineering processes,
+                Ask anything about {displayName} — policies, engineering processes,
                 security standards, and more.
               </p>
               <div className="mt-10 w-full max-w-lg">

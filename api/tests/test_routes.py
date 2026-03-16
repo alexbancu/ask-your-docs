@@ -5,17 +5,133 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from api.models import (
-    AskResponse,
-    DocumentContentResponse,
     DocumentInfo,
-    DocumentsResponse,
     HealthResponse,
-    SourceResponse,
 )
 
 
-class TestAskEndpoint:
-    """Tests for POST /ask endpoint."""
+class TestDemosEndpoint:
+    """Tests for GET /demos endpoint."""
+
+    def test_list_demos(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test listing available demos returns 200 with demo list."""
+        response = test_client.get("/demos")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["demos"]) == 1
+        assert data["demos"][0]["slug"] == "acme-corp"
+        assert data["demos"][0]["name"] == "Acme Corp"
+
+
+class TestDemoScopedAskEndpoint:
+    """Tests for POST /demos/{demo}/ask endpoint."""
+
+    def test_ask_valid_question(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test asking a valid question returns 200 with answer."""
+        response = test_client.post(
+            "/demos/acme-corp/ask", json={"question": "What is the PTO policy?"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert "sources" in data
+        assert "confidence" in data
+        mock_rag_service.ask.assert_called_once_with(
+            "What is the PTO policy?", demo_slug="acme-corp"
+        )
+
+    def test_ask_empty_question(self, test_client: TestClient) -> None:
+        """Test that an empty question returns 422."""
+        response = test_client.post("/demos/acme-corp/ask", json={"question": ""})
+        assert response.status_code == 422
+
+
+class TestDemoScopedDocumentsEndpoint:
+    """Tests for GET /demos/{demo}/documents endpoint."""
+
+    def test_list_documents(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test listing documents for a demo returns 200."""
+        mock_rag_service.list_documents.return_value = [
+            DocumentInfo(name="Employee Handbook", document_type="hr", page_count=9),
+        ]
+
+        response = test_client.get("/demos/acme-corp/documents")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["documents"]) == 1
+        mock_rag_service.list_documents.assert_called_once_with(demo_slug="acme-corp")
+
+
+class TestDemoScopedGetDocumentEndpoint:
+    """Tests for GET /demos/{demo}/documents/{slug} endpoint."""
+
+    def test_get_document_success(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test getting a document by slug returns 200."""
+        response = test_client.get("/demos/acme-corp/documents/employee-handbook")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Employee Handbook"
+        mock_rag_service.get_document.assert_called_once_with(
+            "employee-handbook", demo_slug="acme-corp"
+        )
+
+    def test_get_document_not_found(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test getting a nonexistent document returns 404."""
+        mock_rag_service.get_document.return_value = None
+
+        response = test_client.get("/demos/acme-corp/documents/nonexistent")
+
+        assert response.status_code == 404
+
+
+class TestDemoScopedStreamEndpoint:
+    """Tests for POST /demos/{demo}/ask/stream endpoint."""
+
+    def test_ask_stream_returns_event_stream(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test that /demos/{demo}/ask/stream returns text/event-stream."""
+
+        async def fake_stream(question: str, demo_slug: str = "acme-corp"):
+            yield 'event: sources\ndata: {"sources": [], "confidence": "high"}\n\n'
+            yield "event: token\ndata: Hello\n\n"
+            yield "event: done\ndata: [DONE]\n\n"
+
+        mock_rag_service.ask_stream = fake_stream
+
+        response = test_client.post(
+            "/demos/acme-corp/ask/stream",
+            json={"question": "What is the PTO policy?"},
+        )
+
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+
+        body = response.text
+        assert "event: sources" in body
+        assert "event: token" in body
+        assert "event: done" in body
+
+
+# --- Legacy endpoint tests (backwards compat, delegate to default demo) ---
+
+
+class TestLegacyAskEndpoint:
+    """Tests for POST /ask endpoint (legacy, aliases to acme-corp)."""
 
     def test_ask_valid_question(
         self, test_client: TestClient, mock_rag_service: MagicMock
@@ -30,7 +146,9 @@ class TestAskEndpoint:
         assert "answer" in data
         assert "sources" in data
         assert "confidence" in data
-        mock_rag_service.ask.assert_called_once_with("What is the PTO policy?")
+        mock_rag_service.ask.assert_called_once_with(
+            "What is the PTO policy?", demo_slug="acme-corp"
+        )
 
     def test_ask_empty_question(self, test_client: TestClient) -> None:
         """Test that an empty question returns 422."""
@@ -81,8 +199,8 @@ class TestHealthEndpoint:
         assert data["pinecone_connected"] is True
 
 
-class TestDocumentsEndpoint:
-    """Tests for GET /documents endpoint."""
+class TestLegacyDocumentsEndpoint:
+    """Tests for GET /documents endpoint (legacy)."""
 
     def test_list_documents(
         self, test_client: TestClient, mock_rag_service: MagicMock
@@ -103,8 +221,8 @@ class TestDocumentsEndpoint:
         assert data["documents"][0]["name"] == "Employee Handbook"
 
 
-class TestGetDocumentEndpoint:
-    """Tests for GET /documents/{slug} endpoint."""
+class TestLegacyGetDocumentEndpoint:
+    """Tests for GET /documents/{slug} endpoint (legacy)."""
 
     def test_get_document_success(
         self, test_client: TestClient, mock_rag_service: MagicMock
@@ -119,7 +237,9 @@ class TestGetDocumentEndpoint:
         assert data["document_type"] == "hr"
         assert data["owner"] == "HR Team"
         assert "content" in data
-        mock_rag_service.get_document.assert_called_once_with("employee-handbook")
+        mock_rag_service.get_document.assert_called_once_with(
+            "employee-handbook", demo_slug="acme-corp"
+        )
 
     def test_get_document_not_found(
         self, test_client: TestClient, mock_rag_service: MagicMock
@@ -132,15 +252,15 @@ class TestGetDocumentEndpoint:
         assert response.status_code == 404
 
 
-class TestAskStreamEndpoint:
-    """Tests for POST /ask/stream endpoint."""
+class TestLegacyAskStreamEndpoint:
+    """Tests for POST /ask/stream endpoint (legacy)."""
 
     def test_ask_stream_returns_event_stream(
         self, test_client: TestClient, mock_rag_service: MagicMock
     ) -> None:
         """Test that /ask/stream returns text/event-stream content type."""
 
-        async def fake_stream(question: str):
+        async def fake_stream(question: str, demo_slug: str = "acme-corp"):
             yield 'event: sources\ndata: {"sources": [], "confidence": "high"}\n\n'
             yield "event: token\ndata: Hello\n\n"
             yield "event: done\ndata: [DONE]\n\n"

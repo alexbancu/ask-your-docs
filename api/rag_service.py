@@ -11,16 +11,17 @@ from pinecone import Pinecone
 
 from api.config import CloudConfig
 from api.document_loader import (
-    DOCUMENT_OWNERS,
-    FILENAME_TO_TYPE,
     ChunkDoc,
-    _filename_to_document_name,
+    DemoConfig,
     _is_stale,
     _parse_last_updated,
+    list_demos,
+    load_demo_config,
     load_full_document,
 )
 from api.models import (
     AskResponse,
+    DemoInfo,
     DocumentContentResponse,
     DocumentInfo,
     HealthResponse,
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 HIGH_CONFIDENCE_THRESHOLD = 0.45  # Top score above this → high confidence
 RELEVANCE_CUTOFF = 0.30  # Chunks below this are excluded from context
 
+DEFAULT_DEMO = "acme-corp"
+
 
 class CloudRAGService:
     """RAG service backed by Gemini LLM and Pinecone vector store.
@@ -41,8 +44,6 @@ class CloudRAGService:
     Args:
         config: Cloud configuration with API keys and model settings.
     """
-
-    RESOURCES_DIR = "resources/acme-corp"
 
     def __init__(self, config: CloudConfig) -> None:
         self.config = config
@@ -53,6 +54,33 @@ class CloudRAGService:
         self.index = pc.Index(config.pinecone_index_name)
 
         logger.info("CloudRAGService initialized with model=%s", config.llm_model)
+
+    @staticmethod
+    def _resources_dir(demo_slug: str) -> str:
+        """Return the resources directory path for a demo.
+
+        Args:
+            demo_slug: Demo identifier.
+
+        Returns:
+            Path string like 'resources/acme-corp'.
+        """
+        return f"resources/{demo_slug}"
+
+    @staticmethod
+    def _demo_config(demo_slug: str) -> DemoConfig | None:
+        """Load demo config, returning None if not found.
+
+        Args:
+            demo_slug: Demo identifier.
+
+        Returns:
+            DemoConfig or None.
+        """
+        try:
+            return load_demo_config(demo_slug)
+        except FileNotFoundError:
+            return None
 
     def _embed_query(self, text: str) -> list[float]:
         """Embed a single query string.
@@ -71,12 +99,13 @@ class CloudRAGService:
         return result.embeddings[0].values
 
     def _retrieve(
-        self, question: str
+        self, question: str, demo_slug: str = DEFAULT_DEMO
     ) -> tuple[list[ChunkDoc], list[SourceResponse], str] | None:
         """Retrieve relevant chunks, sources, and confidence for a question.
 
         Args:
             question: User's question.
+            demo_slug: Demo namespace for Pinecone query.
 
         Returns:
             Tuple of (chunks, sources, confidence) or None if no relevant results.
@@ -87,6 +116,7 @@ class CloudRAGService:
             vector=query_vector,
             top_k=self.config.retrieval_k,
             include_metadata=True,
+            namespace=demo_slug,
         )
 
         if not results.matches:
@@ -183,18 +213,19 @@ class CloudRAGService:
         )
         return response.text
 
-    def ask(self, question: str) -> AskResponse:
+    def ask(self, question: str, demo_slug: str = DEFAULT_DEMO) -> AskResponse:
         """Answer a question using RAG pipeline.
 
         Args:
             question: User's question.
+            demo_slug: Demo namespace for retrieval.
 
         Returns:
             AskResponse with answer, sources, and confidence.
         """
         no_info = "I don't have enough information in the available documents to answer that question."
 
-        retrieval = self._retrieve(question)
+        retrieval = self._retrieve(question, demo_slug=demo_slug)
         if retrieval is None:
             return AskResponse(answer=no_info, sources=[], confidence="low")
 
@@ -211,20 +242,23 @@ class CloudRAGService:
             answer=answer, sources=sources, confidence=confidence
         )
 
-    async def ask_stream(self, question: str) -> AsyncGenerator[str, None]:
+    async def ask_stream(
+        self, question: str, demo_slug: str = DEFAULT_DEMO
+    ) -> AsyncGenerator[str, None]:
         """Stream an answer as SSE events.
 
         Yields sources immediately, then streams LLM tokens, then done.
 
         Args:
             question: User's question.
+            demo_slug: Demo namespace for retrieval.
 
         Yields:
             SSE-formatted event strings.
         """
         no_info = "I don't have enough information in the available documents to answer that question."
 
-        retrieval = self._retrieve(question)
+        retrieval = self._retrieve(question, demo_slug=demo_slug)
         if retrieval is None:
             sources_data = json.dumps({"sources": [], "confidence": "low"})
             yield f"event: sources\ndata: {sources_data}\n\n"
@@ -264,18 +298,35 @@ class CloudRAGService:
 
         yield "event: done\ndata: [DONE]\n\n"
 
-    def list_documents(self) -> list[DocumentInfo]:
+    def get_demos(self) -> list[DemoInfo]:
+        """List all available demos.
+
+        Returns:
+            List of DemoInfo objects.
+        """
+        demos = list_demos()
+        return [DemoInfo(slug=d.slug, name=d.name) for d in demos]
+
+    def list_documents(self, demo_slug: str = DEFAULT_DEMO) -> list[DocumentInfo]:
         """List all indexed documents with section counts and freshness metadata.
+
+        Args:
+            demo_slug: Demo namespace for Pinecone query.
 
         Returns:
             List of DocumentInfo objects.
         """
+        demo_config = self._demo_config(demo_slug)
+        resources_dir = self._resources_dir(demo_slug)
+        owner_map = demo_config.document_owners if demo_config else {}
+
         query_vector = self._embed_query("document overview")
 
         results = self.index.query(
             vector=query_vector,
             top_k=100,
             include_metadata=True,
+            namespace=demo_slug,
         )
 
         doc_sections: dict[str, set[int]] = {}
@@ -300,12 +351,11 @@ class CloudRAGService:
         documents: list[DocumentInfo] = []
         for name in sorted(doc_sections):
             slug = doc_slugs[name]
-            # Read freshness metadata from the markdown file
             last_updated: str | None = None
             is_stale = False
-            owner = DOCUMENT_OWNERS.get(slug, "")
+            owner = owner_map.get(slug, "")
 
-            md_path = Path(self.RESOURCES_DIR) / f"{slug}.md"
+            md_path = Path(resources_dir) / f"{slug}.md"
             if md_path.exists():
                 content = md_path.read_text(encoding="utf-8")
                 last_updated = _parse_last_updated(content)
@@ -325,16 +375,21 @@ class CloudRAGService:
 
         return documents
 
-    def get_document(self, slug: str) -> DocumentContentResponse | None:
+    def get_document(
+        self, slug: str, demo_slug: str = DEFAULT_DEMO
+    ) -> DocumentContentResponse | None:
         """Get full content and metadata for a single document.
 
         Args:
             slug: Filename stem (e.g. 'employee-handbook').
+            demo_slug: Demo identifier.
 
         Returns:
             DocumentContentResponse or None if not found.
         """
-        data = load_full_document(self.RESOURCES_DIR, slug)
+        demo_config = self._demo_config(demo_slug)
+        resources_dir = self._resources_dir(demo_slug)
+        data = load_full_document(resources_dir, slug, demo_config=demo_config)
         if data is None:
             return None
         return DocumentContentResponse(**data)

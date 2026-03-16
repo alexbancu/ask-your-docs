@@ -1,9 +1,19 @@
-import type { AskResponse, DocumentContent, DocumentsResponse, HealthResponse, Source } from "../types";
+import type { AskResponse, DemosResponse, DocumentContent, DocumentsResponse, HealthResponse, Source } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
-export async function askQuestion(question: string): Promise<AskResponse> {
-  const response = await fetch(`${API_URL}/ask`, {
+export async function getDemos(): Promise<DemosResponse> {
+  const response = await fetch(`${API_URL}/demos`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch demos: ${response.status}`);
+  }
+
+  return response.json() as Promise<DemosResponse>;
+}
+
+export async function askQuestion(demoSlug: string, question: string): Promise<AskResponse> {
+  const response = await fetch(`${API_URL}/demos/${demoSlug}/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
@@ -23,10 +33,11 @@ interface StreamCallbacks {
 }
 
 export async function askQuestionStream(
+  demoSlug: string,
   question: string,
   callbacks: StreamCallbacks,
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/ask/stream`, {
+  const response = await fetch(`${API_URL}/demos/${demoSlug}/ask/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
@@ -73,8 +84,8 @@ export async function askQuestionStream(
   }
 }
 
-export async function getDocuments(): Promise<DocumentsResponse> {
-  const response = await fetch(`${API_URL}/documents`);
+export async function getDocuments(demoSlug: string): Promise<DocumentsResponse> {
+  const response = await fetch(`${API_URL}/demos/${demoSlug}/documents`);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch documents: ${response.status}`);
@@ -83,8 +94,8 @@ export async function getDocuments(): Promise<DocumentsResponse> {
   return response.json() as Promise<DocumentsResponse>;
 }
 
-export async function getDocumentContent(slug: string): Promise<DocumentContent> {
-  const response = await fetch(`${API_URL}/documents/${slug}`);
+export async function getDocumentContent(demoSlug: string, slug: string): Promise<DocumentContent> {
+  const response = await fetch(`${API_URL}/demos/${demoSlug}/documents/${slug}`);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch document: ${response.status}`);

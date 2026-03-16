@@ -1,0 +1,10 @@
+{
+  "name": "Acme Corp",
+  "documents": {
+    "employee-handbook": { "type": "hr", "owner": "HR Team" },
+    "engineering-runbook": { "type": "engineering", "owner": "Platform Engineering" },
+    "onboarding-guide": { "type": "onboarding", "owner": "People Ops" },
+    "product-docs": { "type": "product", "owner": "Product Management" },
+    "security-policy": { "type": "security", "owner": "InfoSec Team" }
+  }
+}

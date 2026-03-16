@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from api.config import CloudConfig
 from api.document_loader import ChunkDoc
-from api.models import AskResponse, DocumentContentResponse, SourceResponse
+from api.models import AskResponse, DemoInfo, DocumentContentResponse, SourceResponse
 
 
 @pytest.fixture(params=["asyncio"])
@@ -136,6 +136,10 @@ def mock_rag_service(
         is_stale=True,
         section_count=1,
     )
+
+    service.get_demos.return_value = [
+        DemoInfo(slug="acme-corp", name="Acme Corp"),
+    ]
 
     return service
 

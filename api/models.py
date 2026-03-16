@@ -57,6 +57,19 @@ class DocumentContentResponse(BaseModel):
     section_count: int
 
 
+class DemoInfo(BaseModel):
+    """Information about an available demo."""
+
+    slug: str
+    name: str
+
+
+class DemosResponse(BaseModel):
+    """Response from the /demos endpoint."""
+
+    demos: list[DemoInfo]
+
+
 class HealthResponse(BaseModel):
     """Response from the /health endpoint."""
 
