@@ -25,7 +25,7 @@ class TestCloudRAGServiceAsk:
     ) -> CloudRAGService:
         """Create a CloudRAGService with mocked dependencies."""
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
         ):
@@ -151,7 +151,7 @@ class TestCloudRAGServiceHealth:
     ) -> None:
         """Test health check returns healthy when Pinecone is connected."""
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
         ):
@@ -172,7 +172,7 @@ class TestCloudRAGServiceHealth:
         """Test health check returns degraded when Pinecone fails."""
         mock_vectorstore.similarity_search.side_effect = Exception("Connection failed")
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
         ):
@@ -196,7 +196,7 @@ class TestCloudRAGServiceGetDocument:
     ) -> None:
         """Test get_document returns full document content."""
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
             tempfile.TemporaryDirectory() as tmpdir,
@@ -227,7 +227,7 @@ class TestCloudRAGServiceGetDocument:
     ) -> None:
         """Test get_document returns None for missing slug."""
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
             tempfile.TemporaryDirectory() as tmpdir,
@@ -252,7 +252,7 @@ class TestCloudRAGServiceStream:
     ) -> CloudRAGService:
         """Create a CloudRAGService with mocked dependencies."""
         with (
-            patch("api.rag_service.HuggingFaceEmbeddings", return_value=mock_embeddings),
+            patch("api.rag_service.FastEmbedEmbeddings", return_value=mock_embeddings),
             patch("api.rag_service.PineconeVectorStore", return_value=mock_vectorstore),
             patch("api.rag_service.ChatGoogleGenerativeAI", return_value=mock_llm),
         ):

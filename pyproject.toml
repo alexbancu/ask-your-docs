@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "hf-xet>=1.2.0",
-    "langchain-huggingface>=1.1.0",
+    "fastembed>=0.6.0",
+    "langchain-community>=0.4.1",
     "langchain-ollama>=1.0.0",
     "langchain-text-splitters>=1.0.0",
     "pytest>=9.0.1",

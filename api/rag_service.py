@@ -6,8 +6,8 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain_core.documents import Document
+from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 from api.config import CloudConfig
@@ -47,7 +47,7 @@ class CloudRAGService:
     def __init__(self, config: CloudConfig) -> None:
         self.config = config
 
-        self.embeddings = HuggingFaceEmbeddings(
+        self.embeddings = FastEmbedEmbeddings(
             model_name=config.embedding_model,
         )
 
