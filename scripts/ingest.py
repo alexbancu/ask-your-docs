@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIMENSION = 384
+EMBEDDING_DIMENSION = 3072
 DOCS_DIR = Path(__file__).parent.parent / "resources" / "acme-corp"
 
 
@@ -64,8 +64,16 @@ def main() -> None:
         sys.exit(1)
 
     # Initialize embeddings
-    logger.info("Initializing embedding model...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    google_api_key = os.getenv("GOOGLE_API_KEY", "")
+    if not google_api_key:
+        logger.error("GOOGLE_API_KEY is required")
+        sys.exit(1)
+
+    logger.info("Initializing Google embedding model...")
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="gemini-embedding-001",
+        google_api_key=google_api_key,
+    )
 
     # Upsert to Pinecone
     logger.info("Upserting %d chunks to Pinecone...", len(documents))

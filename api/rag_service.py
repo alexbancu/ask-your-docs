@@ -6,8 +6,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from langchain_core.documents import Document
-from langchain_community.embeddings import FastEmbedEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 from api.config import CloudConfig
@@ -30,7 +29,7 @@ from api.prompts import build_prompt
 
 logger = logging.getLogger(__name__)
 
-# Score thresholds calibrated for MiniLM-L6-v2 + Pinecone cosine
+# Score thresholds calibrated for text-embedding-004 + Pinecone cosine
 HIGH_CONFIDENCE_THRESHOLD = 0.45  # Top score above this → high confidence
 RELEVANCE_CUTOFF = 0.30  # Chunks below this are excluded from context
 
@@ -47,8 +46,9 @@ class CloudRAGService:
     def __init__(self, config: CloudConfig) -> None:
         self.config = config
 
-        self.embeddings = FastEmbedEmbeddings(
-            model_name=config.embedding_model,
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model=config.embedding_model,
+            google_api_key=config.google_api_key,
         )
 
         self.vectorstore = PineconeVectorStore(

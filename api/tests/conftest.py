@@ -98,8 +98,8 @@ def mock_llm() -> MagicMock:
 def mock_embeddings() -> MagicMock:
     """Create a mock embedding model."""
     mock = MagicMock()
-    mock.embed_query.return_value = [0.1] * 384
-    mock.embed_documents.return_value = [[0.1] * 384]
+    mock.embed_query.return_value = [0.1] * 3072
+    mock.embed_documents.return_value = [[0.1] * 3072]
     return mock
 
 

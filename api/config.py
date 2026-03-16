@@ -14,7 +14,7 @@ class CloudConfig:
         google_api_key: Google API key for Gemini LLM.
         pinecone_api_key: Pinecone API key for vector store.
         pinecone_index_name: Name of the Pinecone index.
-        embedding_model: HuggingFace embedding model name.
+        embedding_model: Google embedding model name.
         llm_model: Gemini model name.
         llm_temperature: Temperature for LLM generation.
         max_output_tokens: Maximum tokens in LLM response.
@@ -24,7 +24,7 @@ class CloudConfig:
     google_api_key: str
     pinecone_api_key: str
     pinecone_index_name: str = "acme-corp-knowledge"
-    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_model: str = "gemini-embedding-001"
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.3
     max_output_tokens: int = 2048
