@@ -17,6 +17,7 @@ class CloudConfig:
         embedding_model: HuggingFace embedding model name.
         llm_model: Gemini model name.
         llm_temperature: Temperature for LLM generation.
+        max_output_tokens: Maximum tokens in LLM response.
         retrieval_k: Number of chunks to retrieve.
     """
 
@@ -26,7 +27,8 @@ class CloudConfig:
     embedding_model: str = "all-MiniLM-L6-v2"
     llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.3
-    retrieval_k: int = 6
+    max_output_tokens: int = 2048
+    retrieval_k: int = 10
 
 
 def load_config() -> CloudConfig:

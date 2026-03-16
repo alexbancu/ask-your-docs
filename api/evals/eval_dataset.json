@@ -1,0 +1,342 @@
+[
+  {
+    "id": "factual-pto-days",
+    "question": "How many PTO days do full-time employees get?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "20 days of PTO per year",
+      "accrued at 1.67 days per month"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": ["unlimited PTO"],
+    "expected_confidence": "high",
+    "notes": "Basic factual lookup from Employee Handbook section 2"
+  },
+  {
+    "id": "factual-401k-match",
+    "question": "What is the 401(k) matching policy at Acme Corp?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "100% match up to 4% of salary",
+      "4-year cliff vesting schedule"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": ["immediate vesting", "6% match"],
+    "expected_confidence": "high",
+    "notes": "Benefits section of Employee Handbook"
+  },
+  {
+    "id": "factual-p1-response",
+    "question": "What are the SLA requirements for a P1 incident?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "15 minutes response time",
+      "4 hours resolution target"
+    ],
+    "expected_sources": ["Engineering Runbook"],
+    "forbidden_claims": ["30 minutes", "1 hour response"],
+    "expected_confidence": "high",
+    "notes": "Incident severity levels in Engineering Runbook section 1"
+  },
+  {
+    "id": "factual-remote-work",
+    "question": "What is Acme Corp's remote work policy?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "3/2 hybrid model",
+      "in-office Tuesday, Wednesday, and Thursday",
+      "Monday and Friday are remote"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": ["fully remote", "5 days in office"],
+    "expected_confidence": "high",
+    "notes": "Remote work policy from Employee Handbook section 3"
+  },
+  {
+    "id": "factual-expense-tiers",
+    "question": "What are the expense approval tiers at Acme Corp?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "under $200 auto-approved",
+      "$200 to $1,000 requires manager approval",
+      "over $1,000 requires VP-level approval"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Expense policy from Employee Handbook section 4"
+  },
+  {
+    "id": "factual-api-rate-limits",
+    "question": "What are the API rate limits for Acme Analytics?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "1,000 requests per minute per API key",
+      "burst allowance of 50 requests per second"
+    ],
+    "expected_sources": ["Product Documentation"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "REST API section of Product Documentation"
+  },
+  {
+    "id": "factual-password-policy",
+    "question": "What is the password policy at Acme Corp?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "16 characters minimum",
+      "must include uppercase, lowercase, numbers, and special characters"
+    ],
+    "expected_sources": ["Security Policy"],
+    "forbidden_claims": ["8 characters", "12 characters"],
+    "expected_confidence": "high",
+    "notes": "Password policy from Security Policy section 2"
+  },
+  {
+    "id": "factual-data-retention",
+    "question": "How long does Acme Analytics retain raw event data?",
+    "category": "factual_accuracy",
+    "expected_facts": [
+      "raw event data retained for 13 months",
+      "aggregated data retained for 3 years"
+    ],
+    "expected_sources": ["Product Documentation"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Data model section of Product Documentation"
+  },
+  {
+    "id": "source-pto-policy",
+    "question": "Which document describes Acme Corp's PTO policy?",
+    "category": "source_attribution",
+    "expected_facts": [
+      "Employee Handbook"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Should cite Employee Handbook as the source"
+  },
+  {
+    "id": "source-oncall-compensation",
+    "question": "Where can I find information about on-call compensation?",
+    "category": "source_attribution",
+    "expected_facts": [
+      "Engineering Runbook",
+      "$500 per week",
+      "$200 per P1/P2 incident"
+    ],
+    "expected_sources": ["Engineering Runbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "On-call section of Engineering Runbook"
+  },
+  {
+    "id": "source-sso-setup",
+    "question": "Where is SSO setup documented?",
+    "category": "source_attribution",
+    "expected_facts": [
+      "Okta"
+    ],
+    "expected_sources": ["Security Policy", "Onboarding Guide"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "SSO is covered in Security Policy and referenced in Onboarding Guide"
+  },
+  {
+    "id": "source-deploy-process",
+    "question": "Which document covers the deployment process?",
+    "category": "source_attribution",
+    "expected_facts": [
+      "Engineering Runbook"
+    ],
+    "expected_sources": ["Engineering Runbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Deployment section of Engineering Runbook"
+  },
+  {
+    "id": "cross-new-hire-security",
+    "question": "What security training and access setup does a new hire need to complete?",
+    "category": "cross_document",
+    "expected_facts": [
+      "Security Awareness Training",
+      "Okta account for SSO",
+      "16 character minimum password"
+    ],
+    "expected_sources": ["Onboarding Guide", "Security Policy"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Requires info from both Onboarding Guide (training list, SSO setup) and Security Policy (password policy)"
+  },
+  {
+    "id": "cross-incident-handling",
+    "question": "How should a security-related production incident be handled, including both engineering and security response?",
+    "category": "cross_document",
+    "expected_facts": [
+      "severity levels from P1 to P4",
+      "report to #security-incidents or security@acmecorp.com",
+      "post-mortem required for P1 and P2"
+    ],
+    "expected_sources": ["Engineering Runbook", "Security Policy"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Combines Engineering Runbook incident process with Security Policy incident response"
+  },
+  {
+    "id": "cross-equipment-expenses",
+    "question": "How does a new hire get their home office equipment stipend and submit the expense?",
+    "category": "cross_document",
+    "expected_facts": [
+      "$500 home office stipend",
+      "submit receipts via Expensify",
+      "within 60 days of start date"
+    ],
+    "expected_sources": ["Onboarding Guide", "Employee Handbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Stipend details in Onboarding Guide, expense process in Employee Handbook"
+  },
+  {
+    "id": "cross-compliance-product",
+    "question": "What compliance certifications and data privacy standards does Acme Corp meet?",
+    "category": "cross_document",
+    "expected_facts": [
+      "SOC 2 Type II",
+      "GDPR compliant"
+    ],
+    "expected_sources": ["Security Policy"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Compliance and GDPR from Security Policy section 3"
+  },
+  {
+    "id": "numerical-slo-api-gateway",
+    "question": "What are the SLOs for the API Gateway service?",
+    "category": "numerical_precision",
+    "expected_facts": [
+      "99.9% availability",
+      "500ms p99 latency",
+      "43.2 minutes monthly error budget"
+    ],
+    "expected_sources": ["Engineering Runbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "SLO table in Engineering Runbook section 4"
+  },
+  {
+    "id": "numerical-pricing-plans",
+    "question": "What are the pricing tiers for Acme Analytics?",
+    "category": "numerical_precision",
+    "expected_facts": [
+      "Starter at $99 per month",
+      "Standard at $499 per month",
+      "Enterprise with custom pricing"
+    ],
+    "expected_sources": ["Product Documentation"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "Pricing table in Product Documentation section 5"
+  },
+  {
+    "id": "numerical-oncall-pay",
+    "question": "How much are on-call engineers paid?",
+    "category": "numerical_precision",
+    "expected_facts": [
+      "$500 per week stipend",
+      "$200 per P1 or P2 incident outside business hours"
+    ],
+    "expected_sources": ["Engineering Runbook"],
+    "forbidden_claims": [],
+    "expected_confidence": "high",
+    "notes": "On-call compensation in Engineering Runbook section 2"
+  },
+  {
+    "id": "unanswerable-stock-price",
+    "question": "What is Acme Corp's current stock price?",
+    "category": "unanswerable",
+    "expected_facts": [],
+    "expected_sources": [],
+    "forbidden_claims": [
+      "stock price is",
+      "trading at",
+      "share price"
+    ],
+    "expected_confidence": "low",
+    "notes": "No stock information in any document. Should decline gracefully."
+  },
+  {
+    "id": "unanswerable-salary",
+    "question": "What is the average salary for a senior engineer at Acme Corp?",
+    "category": "unanswerable",
+    "expected_facts": [],
+    "expected_sources": [],
+    "forbidden_claims": [
+      "the average salary is",
+      "engineers earn",
+      "salary range"
+    ],
+    "expected_confidence": "low",
+    "notes": "No salary data in any document. Should decline gracefully."
+  },
+  {
+    "id": "unanswerable-competitor",
+    "question": "How does Acme Analytics compare to Mixpanel?",
+    "category": "unanswerable",
+    "expected_facts": [],
+    "expected_sources": [],
+    "forbidden_claims": [
+      "better than Mixpanel",
+      "Mixpanel lacks",
+      "compared to Mixpanel"
+    ],
+    "expected_confidence": "low",
+    "notes": "Mixpanel is listed as an integration, not a competitor comparison. Should not fabricate."
+  },
+  {
+    "id": "unanswerable-roadmap",
+    "question": "What new features are planned for Acme Analytics in Q3 2025?",
+    "category": "unanswerable",
+    "expected_facts": [],
+    "expected_sources": [],
+    "forbidden_claims": [
+      "planned features include",
+      "the roadmap shows",
+      "upcoming features"
+    ],
+    "expected_confidence": "low",
+    "notes": "No product roadmap in any document. ISO 27001 target Q3 2025 is not a product feature."
+  },
+  {
+    "id": "hallucination-unlimited-pto",
+    "question": "Does Acme Corp offer unlimited PTO?",
+    "category": "hallucination_resistance",
+    "expected_facts": [
+      "20 days of PTO per year",
+      "not unlimited"
+    ],
+    "expected_sources": ["Employee Handbook"],
+    "forbidden_claims": [
+      "unlimited PTO",
+      "take as much time off as"
+    ],
+    "expected_confidence": "high",
+    "notes": "Should clearly state PTO is 20 days, not unlimited"
+  },
+  {
+    "id": "hallucination-hipaa-all-plans",
+    "question": "Is Acme Analytics HIPAA compliant on the Standard plan?",
+    "category": "hallucination_resistance",
+    "expected_facts": [
+      "HIPAA available only for Enterprise Healthcare customers",
+      "BAA required"
+    ],
+    "expected_sources": ["Security Policy"],
+    "forbidden_claims": [
+      "Standard plan is HIPAA compliant",
+      "all plans are HIPAA"
+    ],
+    "expected_confidence": "high",
+    "notes": "Should clarify HIPAA is Enterprise-only with BAA requirement"
+  }
+]

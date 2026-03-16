@@ -1,2 +1,108 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+
+  --color-surface: #0F1117;
+  --color-surface-raised: #161923;
+  --color-surface-overlay: #1E2231;
+  --color-surface-hover: #252A3A;
+
+  --color-border: #2A2F40;
+  --color-border-subtle: #1E2231;
+
+  --color-text-primary: #E8EAF0;
+  --color-text-secondary: #8B90A0;
+  --color-text-tertiary: #5C6070;
+
+  --color-accent: #3B82F6;
+  --color-accent-hover: #2563EB;
+  --color-accent-muted: #1E3A5F;
+
+  --color-user-bubble: #2563EB;
+  --color-user-bubble-text: #FFFFFF;
+
+  --color-green-muted: #1A3329;
+  --color-green-text: #6EE7A0;
+  --color-blue-muted: #1A2740;
+  --color-blue-text: #60A5FA;
+  --color-purple-muted: #271A40;
+  --color-purple-text: #A78BFA;
+  --color-orange-muted: #332211;
+  --color-orange-text: #FDBA74;
+  --color-red-muted: #331A1A;
+  --color-red-text: #FCA5A5;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--color-surface-overlay) 25%, var(--color-surface-hover) 50%, var(--color-surface-overlay) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '▊';
+  color: var(--color-accent);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes highlightFade {
+  0% { background-color: color-mix(in srgb, var(--color-accent) 25%, transparent); }
+  100% { background-color: transparent; }
+}
+
+.section-highlight {
+  animation: highlightFade 2s ease-out;
+  border-radius: 8px;
+}
+
+.doc-inline-link {
+  color: var(--color-accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+
+.doc-inline-link:hover {
+  color: var(--color-accent-hover);
+}

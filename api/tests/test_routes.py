@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from api.models import (
     AskResponse,
+    DocumentContentResponse,
     DocumentInfo,
     DocumentsResponse,
     HealthResponse,
@@ -100,6 +101,68 @@ class TestDocumentsEndpoint:
         data = response.json()
         assert len(data["documents"]) == 2
         assert data["documents"][0]["name"] == "Employee Handbook"
+
+
+class TestGetDocumentEndpoint:
+    """Tests for GET /documents/{slug} endpoint."""
+
+    def test_get_document_success(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test getting a document by slug returns 200."""
+        response = test_client.get("/documents/employee-handbook")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Employee Handbook"
+        assert data["slug"] == "employee-handbook"
+        assert data["document_type"] == "hr"
+        assert data["owner"] == "HR Team"
+        assert "content" in data
+        mock_rag_service.get_document.assert_called_once_with("employee-handbook")
+
+    def test_get_document_not_found(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test getting a nonexistent document returns 404."""
+        mock_rag_service.get_document.return_value = None
+
+        response = test_client.get("/documents/nonexistent")
+
+        assert response.status_code == 404
+
+
+class TestAskStreamEndpoint:
+    """Tests for POST /ask/stream endpoint."""
+
+    def test_ask_stream_returns_event_stream(
+        self, test_client: TestClient, mock_rag_service: MagicMock
+    ) -> None:
+        """Test that /ask/stream returns text/event-stream content type."""
+
+        async def fake_stream(question: str):
+            yield 'event: sources\ndata: {"sources": [], "confidence": "high"}\n\n'
+            yield "event: token\ndata: Hello\n\n"
+            yield "event: done\ndata: [DONE]\n\n"
+
+        mock_rag_service.ask_stream = fake_stream
+
+        response = test_client.post(
+            "/ask/stream", json={"question": "What is the PTO policy?"}
+        )
+
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+
+        body = response.text
+        assert "event: sources" in body
+        assert "event: token" in body
+        assert "event: done" in body
+
+    def test_ask_stream_empty_question(self, test_client: TestClient) -> None:
+        """Test that an empty question returns 422."""
+        response = test_client.post("/ask/stream", json={"question": ""})
+        assert response.status_code == 422
 
 
 class TestCORS:

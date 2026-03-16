@@ -8,7 +8,10 @@ import pytest
 from api.document_loader import (
     _count_heading_level,
     _filename_to_document_name,
+    _is_stale,
+    _parse_last_updated,
     load_documents,
+    load_full_document,
 )
 
 
@@ -111,3 +114,69 @@ class TestLoadDocuments:
             docs = load_documents(tmpdir)
 
             assert all(len(d.page_content) > 0 for d in docs)
+
+
+class TestParseLastUpdated:
+    """Tests for _parse_last_updated."""
+
+    def test_extracts_date(self) -> None:
+        """Test extracting date from markdown content."""
+        content = "# Title\n\nLast updated: January 15, 2025\n\n## 1. Section"
+        assert _parse_last_updated(content) == "January 15, 2025"
+
+    def test_no_date(self) -> None:
+        """Test returns None when no date found."""
+        content = "# Title\n\nNo date here."
+        assert _parse_last_updated(content) is None
+
+    def test_strips_whitespace(self) -> None:
+        """Test that extra whitespace is stripped."""
+        content = "Last updated:   March 5, 2024  "
+        assert _parse_last_updated(content) == "March 5, 2024"
+
+
+class TestIsStale:
+    """Tests for _is_stale."""
+
+    def test_none_is_stale(self) -> None:
+        """Test that None date is considered stale."""
+        assert _is_stale(None) is True
+
+    def test_old_date_is_stale(self) -> None:
+        """Test that a date > 180 days ago is stale."""
+        assert _is_stale("January 1, 2020") is True
+
+    def test_invalid_date_is_stale(self) -> None:
+        """Test that unparseable date is considered stale."""
+        assert _is_stale("not-a-date") is True
+
+
+class TestLoadFullDocument:
+    """Tests for load_full_document."""
+
+    def test_loads_document(self) -> None:
+        """Test loading a full document with metadata."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "employee-handbook.md").write_text(
+                "# Employee Handbook\n\n"
+                "Last updated: January 15, 2025\n\n"
+                "## 1. Welcome\n\nWelcome!\n\n"
+                "## 2. PTO\n\nYou get 20 days.\n"
+            )
+
+            result = load_full_document(tmpdir, "employee-handbook")
+
+            assert result is not None
+            assert result["name"] == "Employee Handbook"
+            assert result["slug"] == "employee-handbook"
+            assert result["document_type"] == "hr"
+            assert result["owner"] == "HR Team"
+            assert result["last_updated"] == "January 15, 2025"
+            assert result["section_count"] == 2
+            assert "# Employee Handbook" in result["content"]
+
+    def test_returns_none_for_missing(self) -> None:
+        """Test returns None for missing document."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = load_full_document(tmpdir, "nonexistent")
+            assert result is None

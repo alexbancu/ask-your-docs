@@ -90,8 +90,10 @@ uv run python -m pytest tests/ -v
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/ask` | Ask a question, returns answer + sources |
+| POST | `/ask/stream` | Stream an answer via SSE |
 | GET | `/health` | Service health check |
 | GET | `/documents` | List indexed documents |
+| GET | `/documents/{slug}` | Get full document content |
 
 ## Deploy Your Own
 

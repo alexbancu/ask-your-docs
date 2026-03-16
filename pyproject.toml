@@ -29,4 +29,11 @@ dev = [
     "pytest-mock>=3.15.1",
     "ruff>=0.14.6",
     "sentence-transformers>=5.1.2",
+    "anthropic>=0.40.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "eval: RAG evaluation tests (require live API keys)",
+]
+addopts = "-m 'not eval'"

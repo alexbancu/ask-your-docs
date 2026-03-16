@@ -8,7 +8,13 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 
 from api.config import CloudConfig
-from api.models import AskResponse, SourceResponse
+from api.models import AskResponse, DocumentContentResponse, SourceResponse
+
+
+@pytest.fixture(params=["asyncio"])
+def anyio_backend(request: pytest.FixtureRequest) -> str:
+    """Restrict anyio tests to asyncio only (trio is not installed)."""
+    return request.param
 
 
 @pytest.fixture
@@ -124,6 +130,17 @@ def mock_rag_service(
             )
         ],
         confidence="high",
+    )
+
+    service.get_document.return_value = DocumentContentResponse(
+        name="Employee Handbook",
+        slug="employee-handbook",
+        document_type="hr",
+        content="# Employee Handbook\n\nLast updated: January 15, 2025\n\n## 1. Welcome\n\nWelcome!",
+        owner="HR Team",
+        last_updated="January 15, 2025",
+        is_stale=True,
+        section_count=1,
     )
 
     return service

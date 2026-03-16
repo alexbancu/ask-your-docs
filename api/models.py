@@ -32,12 +32,29 @@ class DocumentInfo(BaseModel):
     name: str
     document_type: str
     page_count: int
+    slug: str = ""
+    owner: str = ""
+    last_updated: str | None = None
+    is_stale: bool = False
 
 
 class DocumentsResponse(BaseModel):
     """Response from the /documents endpoint."""
 
     documents: list[DocumentInfo]
+
+
+class DocumentContentResponse(BaseModel):
+    """Full document content with metadata."""
+
+    name: str
+    slug: str
+    document_type: str
+    content: str
+    owner: str
+    last_updated: str | None
+    is_stale: bool
+    section_count: int
 
 
 class HealthResponse(BaseModel):

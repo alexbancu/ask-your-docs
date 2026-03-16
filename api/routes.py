@@ -3,10 +3,12 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from api.models import (
     AskRequest,
     AskResponse,
+    DocumentContentResponse,
     DocumentsResponse,
     HealthResponse,
 )
@@ -62,6 +64,27 @@ async def ask_question(request: AskRequest) -> AskResponse:
         raise HTTPException(status_code=500, detail="Failed to process question")
 
 
+@router.post("/ask/stream")
+async def ask_question_stream(request: AskRequest) -> StreamingResponse:
+    """Stream an answer using the RAG pipeline via SSE.
+
+    Args:
+        request: Question request body.
+
+    Returns:
+        StreamingResponse with text/event-stream media type.
+    """
+    service = get_rag_service()
+    return StreamingResponse(
+        service.ask_stream(request.question),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """Check service health status.
@@ -83,3 +106,23 @@ async def list_documents() -> DocumentsResponse:
     service = get_rag_service()
     documents = service.list_documents()
     return DocumentsResponse(documents=documents)
+
+
+@router.get("/documents/{slug}", response_model=DocumentContentResponse)
+async def get_document(slug: str) -> DocumentContentResponse:
+    """Get full content for a single document.
+
+    Args:
+        slug: Document slug (filename stem).
+
+    Returns:
+        Document content with metadata.
+
+    Raises:
+        HTTPException: 404 if document not found.
+    """
+    service = get_rag_service()
+    result = service.get_document(slug)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return result

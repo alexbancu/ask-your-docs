@@ -15,6 +15,21 @@ export interface DocumentInfo {
   name: string;
   document_type: string;
   page_count: number;
+  slug: string;
+  owner: string;
+  last_updated: string | null;
+  is_stale: boolean;
+}
+
+export interface DocumentContent {
+  name: string;
+  slug: string;
+  document_type: string;
+  content: string;
+  owner: string;
+  last_updated: string | null;
+  is_stale: boolean;
+  section_count: number;
 }
 
 export interface DocumentsResponse {
@@ -33,4 +48,12 @@ export interface Message {
   content: string;
   sources?: Source[];
   confidence?: "high" | "low";
+  isStreaming?: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
 }
