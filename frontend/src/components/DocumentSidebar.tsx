@@ -205,20 +205,20 @@ export default function DocumentSidebar({
                       >
                         {doc.name}
                       </p>
-                      <div className="flex items-center gap-1 text-[11px]" style={{ color: "var(--color-text-tertiary)" }}>
-                        <span>
-                          {doc.page_count} section{doc.page_count !== 1 ? "s" : ""} ·{" "}
+                      <div className="text-[11px]" style={{ color: "var(--color-text-tertiary)" }}>
+                        <div className="flex items-center gap-1">
+                          <span>{doc.page_count} section{doc.page_count !== 1 ? "s" : ""}</span>
+                          <span>·</span>
                           <span style={{ color: style.text }}>{doc.document_type}</span>
-                        </span>
+                        </div>
                         {doc.last_updated && (
-                          <>
-                            <span className="mx-0.5">·</span>
+                          <div className="mt-0.5 flex items-center gap-1">
                             <span
-                              className="inline-block h-1.5 w-1.5 rounded-full"
+                              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
                               style={{ background: doc.is_stale ? "var(--color-orange-text)" : "#22C55E" }}
                             />
                             <span>{doc.last_updated}</span>
-                          </>
+                          </div>
                         )}
                       </div>
                     </div>
